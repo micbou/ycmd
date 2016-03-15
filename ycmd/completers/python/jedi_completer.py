@@ -26,9 +26,10 @@ from future import standard_library
 from future.utils import native
 standard_library.install_aliases()
 
-from ycmd.utils import ToBytes, ProcessIsRunning
+from ycmd import extra_conf_store, hmac_utils, responses, utils
 from ycmd.completers.completer import Completer
-from ycmd import responses, utils, hmac_utils
+from ycmd.responses import YCM_EXTRA_CONF_FILENAME
+from ycmd.utils import ToBytes, ProcessIsRunning
 from tempfile import NamedTemporaryFile
 
 from base64 import b64encode
@@ -70,6 +71,10 @@ class JediCompleter( Completer ):
     self._keep_logfiles = user_options[ 'server_keep_logfiles' ]
     self._hmac_secret = ''
     self._python_binary_path = sys.executable
+
+    self._no_extra_conf_file_warning_posted = False
+    self._extra_conf = None
+    self._additional_sources = []
 
     self._UpdatePythonBinary( user_options.get( 'python_binary_path' ) )
     self._StartServer()
@@ -225,7 +230,8 @@ class JediCompleter( Completer ):
       'source': source,
       'line': line,
       'col': col,
-      'source_path': path
+      'source_path': path,
+      'modules': self._additional_sources
     }
 
 
@@ -459,9 +465,11 @@ class JediCompleter( Completer ):
        if self.ServerIsRunning():
          return ( 'JediHTTP running at 127.0.0.1:{0}\n'
                   '  python binary: {1}\n'
-                  '  stdout log: {2}\n'
-                  '  stderr log: {3}' ).format( self._jedihttp_port,
+                  '  additional sources: {2} files\n'
+                  '  stdout log: {3}\n'
+                  '  stderr log: {4}' ).format( self._jedihttp_port,
                                                 self._python_binary_path,
+                                                len( self._additional_sources ),
                                                 self._logfile_stdout,
                                                 self._logfile_stderr )
 
@@ -472,3 +480,58 @@ class JediCompleter( Completer ):
                                                 self._logfile_stderr )
 
        return 'JediHTTP is not running'
+
+
+  def _SetExtraConf( self, filepath ):
+    extra_conf = extra_conf_store.ModuleForSourceFile( filepath )
+    if not extra_conf and not self._no_extra_conf_file_warning_posted:
+      self._no_extra_conf_file_warning_posted = True
+      self._logger.warning( 'No {0} file detected for {1}'.format(
+                              YCM_EXTRA_CONF_FILENAME,
+                              filepath ) )
+      raise RuntimeError( 'Warning: Unable to detect a {0} file in the '
+                          'hierarchy before {1} file and no global {0} '
+                          'file was found. This is recommended for a better '
+                          'Python experience. Please see the User Guide '
+                          'for details.'.format( YCM_EXTRA_CONF_FILENAME,
+                                                 filepath ) )
+
+    if not hasattr( extra_conf, 'PythonSettings' ):
+      message = 'No PythonSettings in {0}.'.format( YCM_EXTRA_CONF_FILENAME )
+      self._logger.error( message )
+      raise RuntimeError( message )
+
+    self._extra_conf = extra_conf
+
+
+  def _SetSettings( self, client_data ):
+    results = self._extra_conf.PythonSettings( client_data = client_data )
+    if not results or not isinstance( results, dict ):
+      message = 'No dictionary returned by PythonSettings in {0}.'.format(
+        YCM_EXTRA_CONF_FILENAME )
+      self._logger.error( message )
+      raise RuntimeError( message )
+
+    if 'additional_sources' not in results:
+      message = ( "Missing 'additional_sources' key from dictionary returned by"
+                  " PythonSettings in {0}.".format( YCM_EXTRA_CONF_FILENAME ) )
+      self._logger.error( message )
+      raise RuntimeError( message )
+
+    additional_sources = results[ 'additional_sources' ]
+
+    if not isinstance( additional_sources, list ):
+      message = ( "'additional_sources' returned by PythonSettings in {0} "
+                  "must be a list.".format( YCM_EXTRA_CONF_FILENAME ) )
+      self._logger.error( message )
+      raise RuntimeError( message )
+
+    self._logger.debug( 'Added sources: {0}'.format( additional_sources ) )
+    self._additional_sources = additional_sources
+
+
+  def OnFileReadyToParse( self, request_data ):
+    if not self._extra_conf:
+      self._SetExtraConf( request_data[ 'filepath' ] )
+
+    self._SetSettings( request_data.get( 'extra_conf_data', None ) )

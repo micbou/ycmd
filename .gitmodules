@@ -21,7 +21,8 @@
 	url = https://github.com/nsf/gocode.git
 [submodule "third_party/JediHTTP"]
 	path = third_party/JediHTTP
-	url = https://github.com/vheon/JediHTTP
+	url = https://github.com/micbou/JediHTTP
+    branch = additional-dynamic-modules
 [submodule "third_party/racerd"]
 	path = third_party/racerd
 	url = https://github.com/jwilm/racerd
