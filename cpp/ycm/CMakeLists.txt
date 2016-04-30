@@ -49,16 +49,19 @@ if ( USE_CLANG_COMPLETER AND
     endif()
     set( CLANG_FILENAME "${CLANG_DIRNAME}.exe" )
   else()
+    # There are many pre-built binaries of Linux distributions available
+    # upstream. They all share common dependencies except the zlib, terminfo,
+    # and ncurses libraries. These libraries are not needed for our use case so
+    # in order to support most distributions, we pick the binaries with the
+    # least dependencies: this means Ubuntu 16.04 on 64-bit (no zlib, terminfo,
+    # and ncurses dependencies) and Fedora 23 on 32-bit (no terminfo and ncurses
+    # dependencies). There is no Ubuntu 16.04 for 32-bit.
     if ( 64_BIT_PLATFORM )
-      # We MUST support the latest Ubuntu LTS release!
-      # At the time of writing, that's 14.04. Switch to next LTS ~6 months after
-      # it comes out.
-      set( CLANG_DIRNAME "clang+llvm-${CLANG_VERSION}-x86_64-linux-gnu-ubuntu-14.04" )
+      set( CLANG_DIRNAME "clang+llvm-${CLANG_VERSION}-x86_64-linux-gnu-ubuntu-16.04" )
       set( CLANG_SHA256
-           "3120c3055ea78bbbb6848510a2af70c68538b990cb0545bac8dad01df8ff69d7" )
+           "866dda64c990e1489f8da40237f9cd96f4f57ffdc110f0b277bf9965d13b688b" )
       set( CLANG_FILENAME "${CLANG_DIRNAME}.tar.xz" )
     else()
-      # Use the prebuilt x86 binaries for Fedora 23.
       set( CLANG_DIRNAME "clang+llvm-${CLANG_VERSION}-i686-fedora23" )
       set( CLANG_SHA256
            "063a5430b1895a1565831ab0b840cdb14f22ee9fad38e82b9bb8be76e49f1a8b" )
