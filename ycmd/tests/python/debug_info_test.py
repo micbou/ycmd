@@ -22,14 +22,15 @@ from __future__ import absolute_import
 # Not installing aliases from python-future; it's unreliable and slow.
 from builtins import *  # noqa
 
-from hamcrest import assert_that, contains, has_entry, has_entries, instance_of
+from hamcrest import ( assert_that, contains, contains_inanyorder, has_entry,
+                       has_entries, has_item, instance_of )
 
-from ycmd.tests.python import SharedYcmd
-from ycmd.tests.test_utils import BuildRequest
+from ycmd.tests.python import IsolatedYcmd, PathToTestFile, SharedYcmd
+from ycmd.tests.test_utils import BuildRequest, StopCompleterServer
 
 
 @SharedYcmd
-def DebugInfo_test( app ):
+def DebugInfo_NoProject_test( app ):
   request_data = BuildRequest( filetype = 'python' )
   assert_that(
     app.post_json( '/debug_info', request_data ).json,
@@ -43,11 +44,68 @@ def DebugInfo_test( app ):
         'address': instance_of( str ),
         'port': instance_of( int ),
         'logfiles': contains( instance_of( str ),
-                              instance_of( str ) )
+                              instance_of( str ) ),
+        'extras': contains(
+          has_entries( {
+            'key': 'Python interpreter',
+            'value': instance_of( str )
+          } ),
+          has_entries( {
+            'key': 'Project root',
+            'value': None
+          } )
+        )
       } ) ),
-      'items': contains( has_entries( {
-        'key': 'Python interpreter',
-        'value': instance_of( str )
-      } ) )
     } ) )
+  )
+
+
+@IsolatedYcmd()
+def DebugInfo_MultipleProjects_test( app ):
+  filepaths = [
+    PathToTestFile( 'extra_conf_project', 'package', 'module', 'file.py' ),
+    PathToTestFile( 'setup_project', 'package', 'module', 'file.py' )
+  ]
+  app.post_json(
+      '/load_extra_conf_file',
+      { 'filepath': PathToTestFile( 'extra_conf_project',
+                                    '.ycm_extra_conf.py' ) } )
+
+  try:
+    for filepath in filepaths:
+      event_notification_request = BuildRequest(
+          filetype = 'python',
+          filepath = filepath,
+          event_name = 'FileReadyToParse' )
+      app.post_json( '/event_notification', event_notification_request )
+
+    debug_info = app.post_json( '/debug_info',
+                                BuildRequest( filetype = 'python' ) ).json
+  finally:
+    for filepath in filepaths:
+      StopCompleterServer( app, 'python', filepath )
+
+  servers = debug_info[ 'completer' ][ 'servers' ]
+  assert_that(
+    servers,
+    contains_inanyorder(
+      has_entries( {
+        'is_running': True,
+        'extras': has_item(
+          has_entries( {
+            'key': 'Project root',
+            'value': PathToTestFile( 'extra_conf_project' )
+          } )
+        )
+      } ),
+      has_entries( {
+        'is_running': True,
+        'extras': has_item(
+          has_entries( {
+            'key': 'Project root',
+            'value': PathToTestFile( 'setup_project' )
+          } )
+        )
+      } )
+    )
   )

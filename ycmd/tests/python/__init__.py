@@ -22,11 +22,14 @@ from __future__ import absolute_import
 # Not installing aliases from python-future; it's unreliable and slow.
 from builtins import *  # noqa
 
+from mock import patch
 import functools
 import os
 
 from ycmd import handlers
+from ycmd.utils import PathsToAllParentFolders
 from ycmd.tests.test_utils import ( ClearCompletionsCache, SetUpApp,
+                                    StartCompleterServer,
                                     StopCompleterServer,
                                     WaitUntilCompleterServerReady )
 
@@ -38,22 +41,37 @@ def PathToTestFile( *args ):
   return os.path.join( dir_of_current_script, 'testdata', *args )
 
 
+def PathsToParentFoldersUntilTestData( path ):
+  for path in PathsToAllParentFolders( path ):
+    yield path
+    if os.path.basename( path ) == 'testdata':
+      return
+
+
+testdata_isolation = patch(
+   'ycmd.completers.python.settings.PathsToAllParentFolders',
+   PathsToParentFoldersUntilTestData )
+
+
 def setUpPackage():
   """Initializes the ycmd server as a WebTest application that will be shared
   by all tests using the SharedYcmd decorator in this package. Additional
   configuration that is common to these tests, like starting a semantic
   subserver, should be done here."""
-  global shared_app
+  global testdata_isolation, shared_app
 
+  testdata_isolation.start()
   shared_app = SetUpApp()
+  StartCompleterServer( shared_app, 'python' )
   WaitUntilCompleterServerReady( shared_app, 'python' )
 
 
 def tearDownPackage():
   """Cleans up the tests using the SharedYcmd decorator in this package. It is
   executed once after running all the tests in the package."""
-  global shared_app
+  global testdata_isolation, shared_app
 
+  testdata_isolation.stop()
   StopCompleterServer( shared_app, 'python' )
 
 
@@ -97,7 +115,6 @@ def IsolatedYcmd( custom_options = {} ):
       try:
         test( app, *args, **kwargs )
       finally:
-        StopCompleterServer( app, 'python' )
         handlers._server_state = old_server_state
     return Wrapper
   return Decorator

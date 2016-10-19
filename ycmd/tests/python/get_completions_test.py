@@ -26,51 +26,13 @@ from builtins import *  # noqa
 
 from nose.tools import eq_
 from hamcrest import ( assert_that, has_item, has_items, has_entry,
-                       has_entries, contains, empty, contains_string )
+                       has_entries, contains, contains_string )
 import requests
 
 from ycmd.utils import ReadFile
 from ycmd.tests.python import PathToTestFile, SharedYcmd
 from ycmd.tests.test_utils import ( BuildRequest, CompletionEntryMatcher,
                                     CompletionLocationMatcher )
-
-
-@SharedYcmd
-def GetCompletions_Basic_test( app ):
-  filepath = PathToTestFile( 'basic.py' )
-  completion_data = BuildRequest( filepath = filepath,
-                                  filetype = 'python',
-                                  contents = ReadFile( filepath ),
-                                  line_num = 7,
-                                  column_num = 3)
-
-  results = app.post_json( '/completions',
-                           completion_data ).json[ 'completions' ]
-
-  assert_that( results,
-               has_items(
-                 CompletionEntryMatcher( 'a' ),
-                 CompletionEntryMatcher( 'b' ),
-                 CompletionLocationMatcher( 'line_num', 3 ),
-                 CompletionLocationMatcher( 'line_num', 4 ),
-                 CompletionLocationMatcher( 'column_num', 10 ),
-                 CompletionLocationMatcher( 'filepath', filepath ) ) )
-
-
-@SharedYcmd
-def GetCompletions_UnicodeDescription_test( app ):
-  filepath = PathToTestFile( 'unicode.py' )
-  completion_data = BuildRequest( filepath = filepath,
-                                  filetype = 'python',
-                                  contents = ReadFile( filepath ),
-                                  force_semantic = True,
-                                  line_num = 5,
-                                  column_num = 3)
-
-  results = app.post_json( '/completions',
-                           completion_data ).json[ 'completions' ]
-  assert_that( results, has_item(
-    has_entry( 'detailed_info', contains_string( u'aafäö' ) ) ) )
 
 
 def RunTest( app, test ):
@@ -111,6 +73,55 @@ def RunTest( app, test ):
 
 
 @SharedYcmd
+def GetCompletions_Basic_test( app ):
+  filepath = PathToTestFile( 'basic.py' )
+  RunTest( app, {
+    'description': 'basic completion',
+    'request': {
+      'filetype'  : 'python',
+      'filepath'  : filepath,
+      'line_num'  : 7,
+      'column_num': 3
+    },
+    'expect': {
+      'response': requests.codes.ok,
+      'data': has_entries( {
+        'completions': has_items(
+          CompletionEntryMatcher( 'a' ),
+          CompletionEntryMatcher( 'b' ),
+          CompletionLocationMatcher( 'line_num', 3 ),
+          CompletionLocationMatcher( 'line_num', 4 ),
+          CompletionLocationMatcher( 'column_num', 10 ),
+          CompletionLocationMatcher( 'filepath', filepath )
+        )
+      } )
+    }
+  } )
+
+
+@SharedYcmd
+def GetCompletions_UnicodeDescription_test( app ):
+  RunTest( app, {
+    'description': 'completion with unicode description',
+    'request': {
+      'filetype'      : 'python',
+      'filepath'      : PathToTestFile( 'unicode.py' ),
+      'line_num'      : 5,
+      'column_num'    : 3,
+      'force_semantic': True
+    },
+    'expect': {
+      'response': requests.codes.ok,
+      'data': has_entries( {
+        'completions': has_item(
+          has_entry( 'detailed_info', contains_string( u'aafäö' ) )
+        )
+      } )
+    }
+  } )
+
+
+@SharedYcmd
 def GetCompletions_NoSuggestions_Fallback_test( app ):
   # Python completer doesn't raise NO_COMPLETIONS_MESSAGE, so this is a
   # different code path to the Clang completer cases
@@ -132,10 +143,9 @@ def GetCompletions_NoSuggestions_Fallback_test( app ):
         'completions': contains(
           CompletionEntryMatcher( 'a_parameter', '[ID]' ),
           CompletionEntryMatcher( 'another_parameter', '[ID]' ),
-        ),
-        'errors': empty(),
+        )
       } )
-    },
+    }
   } )
 
 
@@ -154,8 +164,7 @@ def GetCompletions_Unicode_InLine_test( app ):
       'data': has_entries( {
         'completions': contains(
           CompletionEntryMatcher( 'center', 'def center' )
-        ),
-        'errors': empty(),
+        )
       } )
-    },
+    }
   } )

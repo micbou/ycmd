@@ -197,13 +197,13 @@ Guide_][extra-conf-doc].
 
 ### `.ycm_extra_conf.py` specification
 
-The `.ycm_extra_conf.py` module must define the following methods:
+The `.ycm_extra_conf.py` module must define the following functions:
 
 #### `FlagsForFile( filename, **kwargs )`
 
 Required for c-family language support.
 
-This method is called by the c-family completer to get the
+This function is called by the c-family completer to get the
 compiler flags to use when compiling the file with absolute path `filename`.
 The following additional arguments are optionally supplied depending on user
 configuration:
@@ -235,6 +235,21 @@ def FlagsForFile( filename, **kwargs ):
     'flags': [ '-x', 'c++' ]
   }
 ```
+
+#### `PythonSettings( **kwargs )`
+
+Optional for Python support.
+
+This function allows users to customize the Python completer per project. The
+following arguments are optionally supplied depending on user configuration:
+
+- `client_data`: any additional data supplied by the client application.
+   See the [YouCompleteMe documentation][extra-conf-vim-data-doc] for an
+   example.
+
+The return value is a dictionary containing optionally the following item:
+
+- `interpreter_path`: path to the Python interpreter.
 
 ### Global extra conf file specification
 

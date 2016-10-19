@@ -27,11 +27,12 @@ from builtins import *  # noqa
 
 from ycmd.utils import ToBytes, ToUnicode, ProcessIsRunning, urljoin
 from ycmd.completers.completer import Completer
+from ycmd.completers.python.settings import PythonSettings
 from ycmd import responses, utils, hmac_utils
 from tempfile import NamedTemporaryFile
 
 from base64 import b64encode
-from future.utils import native
+from future.utils import itervalues, native
 import json
 import logging
 import requests
@@ -59,28 +60,10 @@ class JediCompleter( Completer ):
 
   def __init__( self, user_options ):
     super( JediCompleter, self ).__init__( user_options )
-    self._server_lock = threading.RLock()
-    self._jedihttp_port = None
-    self._jedihttp_phandle = None
+    self._project_lock = threading.Lock()
+    self._completer_per_project_root = dict()
     self._logger = logging.getLogger( __name__ )
-    self._logfile_stdout = None
-    self._logfile_stderr = None
-    self._keep_logfiles = user_options[ 'server_keep_logfiles' ]
-    self._hmac_secret = ''
-    self._python_binary_path = sys.executable
-
-    self._UpdatePythonBinary( user_options.get( 'python_binary_path' ) )
-    self._StartServer()
-
-
-  def _UpdatePythonBinary( self, binary ):
-    if binary:
-      resolved_binary = utils.FindExecutable( binary )
-      if not resolved_binary:
-        msg = BINARY_NOT_FOUND_MESSAGE.format( binary )
-        self._logger.error( msg )
-        raise RuntimeError( msg )
-      self._python_binary_path = resolved_binary
+    self._python_settings = PythonSettings()
 
 
   def SupportedFiletypes( self ):
@@ -89,69 +72,161 @@ class JediCompleter( Completer ):
 
 
   def Shutdown( self ):
-    self._StopServer()
+    for completer in itervalues( self._completer_per_project_root ):
+      completer.StopServer()
+
+
+  def _ProjectSubcommand( self, request_data, method,
+                          no_request_data = False, **kwargs ):
+    completer = self._GetProjectCompleter( request_data )
+    if not no_request_data:
+      kwargs[ 'request_data' ] = request_data
+    return getattr( completer, method )( **kwargs )
+
+
+  def GetSubcommandsMap( self ):
+    return {
+      'GoToDefinition' : ( lambda self, request_data, args:
+         self._GetProjectCompleter( request_data ).GoToDefinition(
+             request_data ) ),
+      'GoToDeclaration': ( lambda self, request_data, args:
+         self._GetProjectCompleter( request_data ).GoToDeclaration(
+             request_data ) ),
+      'GoTo'           : ( lambda self, request_data, args:
+         self._GetProjectCompleter( request_data ).GoTo( request_data ) ),
+      'GetDoc'         : ( lambda self, request_data, args:
+         self._GetProjectCompleter( request_data ).GetDoc( request_data ) ),
+      'GoToReferences' : ( lambda self, request_data, args:
+         self._GetProjectCompleter( request_data ).GoToReferences(
+             request_data ) ),
+      'StopServer'     : ( lambda self, request_data, args:
+         self._GetProjectCompleter( request_data ).StopServer() ),
+      'RestartServer'  : ( lambda self, request_data, args:
+         self._GetProjectCompleter( request_data ).RestartServer( *args ) ),
+    }
+
+
+  def _GetProjectCompleter( self, request_data ):
+    """Get the project completer or create a new one if it does not already
+    exist. Use a lock to avoid creating the same project completer multiple
+    times."""
+    filepath = request_data[ 'filepath' ]
+    client_data = request_data.get( 'extra_conf_data' )
+    project_root = self._python_settings.GetProjectRootForFile( filepath )
+    settings = self._python_settings.SettingsForFile(
+        filepath,
+        client_data = client_data )
+
+    with self._project_lock:
+      try:
+        return self._completer_per_project_root[ project_root ]
+      except KeyError:
+        completer = JediProjectCompleter( project_root,
+                                          settings,
+                                          self.user_options )
+        self._completer_per_project_root[ project_root ] = completer
+        return completer
+
+
+  def _GetExtraData( self, completion ):
+    location = {}
+    if completion[ 'module_path' ]:
+      location[ 'filepath' ] = completion[ 'module_path' ]
+    if completion[ 'line' ]:
+      location[ 'line_num' ] = completion[ 'line' ]
+    if completion[ 'column' ]:
+      location[ 'column_num' ] = completion[ 'column' ] + 1
+
+    if location:
+      extra_data = {}
+      extra_data[ 'location' ] = location
+      return extra_data
+    return None
+
+
+  def ComputeCandidatesInner( self, request_data ):
+    completer = self._GetProjectCompleter( request_data )
+    return [ responses.BuildCompletionData(
+                completion[ 'name' ],
+                completion[ 'description' ],
+                completion[ 'docstring' ],
+                extra_data = self._GetExtraData( completion ) )
+             for completion in completer._JediCompletions( request_data ) ]
+
+
+  def OnFileReadyToParse( self, request_data ):
+    self._GetProjectCompleter( request_data )
 
 
   def ServerIsHealthy( self ):
-    """
-    Check if JediHTTP is alive AND ready to serve requests.
-    """
-    if not self._ServerIsRunning():
-      self._logger.debug( 'JediHTTP not running.' )
-      return False
-    try:
-      return bool( self._GetResponse( '/ready' ) )
-    except requests.exceptions.ConnectionError as e:
-      self._logger.exception( e )
-      return False
+    """Check if all JediHTTP servers are healthy."""
+    completers = itervalues( self._completer_per_project_root )
+    return all( completer.ServerIsHealthy() for completer in completers
+                if completer.ServerIsRunning() )
 
 
-  def _ServerIsRunning( self ):
-    """
-    Check if JediHTTP is alive. That doesn't necessarily mean it's ready to
-    serve requests; that's checked by ServerIsHealthy.
-    """
-    with self._server_lock:
-      return ( bool( self._jedihttp_port ) and
-               ProcessIsRunning( self._jedihttp_phandle ) )
+  def DebugInfo( self, request_data ):
+    with self._project_lock:
+      return responses.BuildDebugInfoResponse(
+        name = 'Python',
+        servers = [ completer.DebugInfo() for completer in
+                    itervalues( self._completer_per_project_root ) ] )
 
 
-  def RestartServer( self, binary = None ):
-    """ Restart the JediHTTP Server. """
-    with self._server_lock:
-      if binary:
-        self._UpdatePythonBinary( binary )
-      self._StopServer()
-      self._StartServer()
-
-
-  def _StopServer( self ):
-    with self._server_lock:
-      if self._ServerIsRunning():
-        self._logger.info( 'Stopping JediHTTP server with PID {0}'.format(
-                               self._jedihttp_phandle.pid ) )
-        self._jedihttp_phandle.terminate()
-        try:
-          utils.WaitUntilProcessIsTerminated( self._jedihttp_phandle,
-                                              timeout = 5 )
-          self._logger.info( 'JediHTTP server stopped' )
-        except RuntimeError:
-          self._logger.exception( 'Error while stopping JediHTTP server' )
-
-      self._CleanUp()
-
-
-  def _CleanUp( self ):
-    self._jedihttp_phandle = None
+class JediProjectCompleter( object ):
+  def __init__( self, project_root, settings, user_options ):
+    self._server_lock = threading.RLock()
     self._jedihttp_port = None
-    if not self._keep_logfiles:
-      utils.RemoveIfExists( self._logfile_stdout )
-      self._logfile_stdout = None
-      utils.RemoveIfExists( self._logfile_stderr )
-      self._logfile_stderr = None
+    self._jedihttp_phandle = None
+    self._logger = logging.getLogger( __name__ )
+    self._logfile_stdout = None
+    self._logfile_stderr = None
+    self._hmac_secret = ''
+    self._project_root = project_root
+    self._settings = settings
+    self._python_binary_path = user_options[ 'python_binary_path' ]
+    self._keep_logfiles = user_options[ 'server_keep_logfiles' ]
+    self._interpreter_path = self._GetPythonInterpreter()
+
+    self.StartServer()
 
 
-  def _StartServer( self ):
+  def _GetPythonInterpreter( self, interpreter_path = None ):
+    def _FindPythonInterpreter( interpreter_path ):
+      resolved_path = utils.FindExecutable( os.path.expanduser(
+        os.path.expandvars( interpreter_path ) ) )
+      if resolved_path:
+        return os.path.normpath( resolved_path )
+      message = BINARY_NOT_FOUND_MESSAGE.format( interpreter_path )
+      self._logger.error( message )
+      raise RuntimeError( message )
+
+    if interpreter_path:
+      return _FindPythonInterpreter( interpreter_path )
+
+    interpreter_path = self._settings.get( 'interpreter_path' )
+    if interpreter_path:
+      return _FindPythonInterpreter( interpreter_path )
+
+    interpreter_path = self._python_binary_path
+    if interpreter_path:
+      return _FindPythonInterpreter( interpreter_path )
+
+    return sys.executable
+
+
+  def _GenerateHmacSecret( self ):
+    return os.urandom( HMAC_SECRET_LENGTH )
+
+
+  def _GetLoggingLevel( self ):
+    # Tests are run with the NOTSET logging level but JediHTTP only accepts the
+    # predefined levels above (DEBUG, INFO, WARNING, etc.).
+    log_level = max( self._logger.getEffectiveLevel(), logging.DEBUG )
+    return logging.getLevelName( log_level ).lower()
+
+
+  def StartServer( self ):
     with self._server_lock:
       self._logger.info( 'Starting JediHTTP server' )
       self._jedihttp_port = utils.GetUnusedLocalhostPort()
@@ -165,7 +240,7 @@ class JediCompleter( Completer ):
         json.dump( { 'hmac_secret': ToUnicode(
                         b64encode( self._hmac_secret ) ) },
                    hmac_file )
-        command = [ self._python_binary_path,
+        command = [ self._interpreter_path,
                     PATH_TO_JEDIHTTP,
                     '--port', str( self._jedihttp_port ),
                     '--log', self._GetLoggingLevel(),
@@ -183,22 +258,70 @@ class JediCompleter( Completer ):
                                                     stderr = logerr )
 
 
-  def _GenerateHmacSecret( self ):
-    return os.urandom( HMAC_SECRET_LENGTH )
+  def StopServer( self ):
+    with self._server_lock:
+      if self.ServerIsRunning():
+        self._logger.info( 'Stopping JediHTTP server with PID {0}'.format(
+                               self._jedihttp_phandle.pid ) )
+        self._jedihttp_phandle.terminate()
+        try:
+          utils.WaitUntilProcessIsTerminated( self._jedihttp_phandle,
+                                              timeout = 5 )
+          self._logger.info( 'JediHTTP server stopped' )
+        except RuntimeError:
+          self._logger.exception( 'Error while stopping JediHTTP server' )
+
+      self._CleanUp()
 
 
-  def _GetLoggingLevel( self ):
-    # Tests are run with the NOTSET logging level but JediHTTP only accepts the
-    # predefined levels above (DEBUG, INFO, WARNING, etc.).
-    log_level = max( self._logger.getEffectiveLevel(), logging.DEBUG )
-    return logging.getLevelName( log_level ).lower()
+  def RestartServer( self, interpreter_path = None ):
+    """ Restart the JediHTTP Server. """
+    with self._server_lock:
+      self.StopServer()
+      self._interpreter_path = self._GetPythonInterpreter( interpreter_path )
+      self.StartServer()
 
 
-  def _GetResponse( self, handler, request_data = {} ):
+  def _CleanUp( self ):
+    self._jedihttp_phandle = None
+    self._jedihttp_port = None
+    if not self._keep_logfiles:
+      if self._logfile_stdout:
+        utils.RemoveIfExists( self._logfile_stdout )
+        self._logfile_stdout = None
+      if self._logfile_stderr:
+        utils.RemoveIfExists( self._logfile_stderr )
+        self._logfile_stderr = None
+
+
+  def ServerIsHealthy( self ):
+    """
+    Check if JediHTTP is alive AND ready to serve requests.
+    """
+    if not self.ServerIsRunning():
+      self._logger.debug( 'JediHTTP not running.' )
+      return False
+    try:
+      return bool( self._GetResponse( '/ready' ) )
+    except requests.exceptions.ConnectionError as e:
+      self._logger.exception( e )
+      return False
+
+
+  def ServerIsRunning( self ):
+    """
+    Check if JediHTTP is alive. That doesn't necessarily mean it's ready to
+    serve requests; that's checked by ServerIsHealthy.
+    """
+    with self._server_lock:
+      return ( bool( self._jedihttp_port ) and
+               ProcessIsRunning( self._jedihttp_phandle ) )
+
+
+  def _GetResponse( self, handler, parameters = {} ):
     """POST JSON data to JediHTTP server and return JSON response."""
     handler = ToBytes( handler )
     url = urljoin( self._jedihttp_host, handler )
-    parameters = self._TranslateRequestForJediHTTP( request_data )
     body = ToBytes( json.dumps( parameters ) ) if parameters else bytes()
     extra_headers = self._ExtraHeaders( handler, body )
 
@@ -244,57 +367,12 @@ class JediCompleter( Completer ):
     }
 
 
-  def _GetExtraData( self, completion ):
-      location = {}
-      if completion[ 'module_path' ]:
-        location[ 'filepath' ] = completion[ 'module_path' ]
-      if completion[ 'line' ]:
-        location[ 'line_num' ] = completion[ 'line' ]
-      if completion[ 'column' ]:
-        location[ 'column_num' ] = completion[ 'column' ] + 1
-
-      if location:
-        extra_data = {}
-        extra_data[ 'location' ] = location
-        return extra_data
-      else:
-        return None
-
-
-  def ComputeCandidatesInner( self, request_data ):
-    return [ responses.BuildCompletionData(
-                completion[ 'name' ],
-                completion[ 'description' ],
-                completion[ 'docstring' ],
-                extra_data = self._GetExtraData( completion ) )
-             for completion in self._JediCompletions( request_data ) ]
-
-
   def _JediCompletions( self, request_data ):
-    return self._GetResponse( '/completions',
-                              request_data )[ 'completions' ]
+    request = self._TranslateRequestForJediHTTP( request_data )
+    return self._GetResponse( '/completions', request )[ 'completions' ]
 
 
-  def GetSubcommandsMap( self ):
-    return {
-      'GoToDefinition' : ( lambda self, request_data, args:
-                           self._GoToDefinition( request_data ) ),
-      'GoToDeclaration': ( lambda self, request_data, args:
-                           self._GoToDeclaration( request_data ) ),
-      'GoTo'           : ( lambda self, request_data, args:
-                           self._GoTo( request_data ) ),
-      'GetDoc'         : ( lambda self, request_data, args:
-                           self._GetDoc( request_data ) ),
-      'GoToReferences' : ( lambda self, request_data, args:
-                           self._GoToReferences( request_data ) ),
-      'StopServer'     : ( lambda self, request_data, args:
-                           self.Shutdown() ),
-      'RestartServer'  : ( lambda self, request_data, args:
-                           self.RestartServer( *args ) )
-    }
-
-
-  def _GoToDefinition( self, request_data ):
+  def GoToDefinition( self, request_data ):
     definitions = self._GetDefinitionsList( '/gotodefinition',
                                             request_data )
     if not definitions:
@@ -302,7 +380,7 @@ class JediCompleter( Completer ):
     return self._BuildGoToResponse( definitions )
 
 
-  def _GoToDeclaration( self, request_data ):
+  def GoToDeclaration( self, request_data ):
     definitions = self._GetDefinitionsList( '/gotoassignment',
                                             request_data )
     if not definitions:
@@ -310,21 +388,21 @@ class JediCompleter( Completer ):
     return self._BuildGoToResponse( definitions )
 
 
-  def _GoTo( self, request_data ):
+  def GoTo( self, request_data ):
     try:
-      return self._GoToDefinition( request_data )
+      return self.GoToDefinition( request_data )
     except Exception as e:
       self._logger.exception( e )
       pass
 
     try:
-      return self._GoToDeclaration( request_data )
+      return self.GoToDeclaration( request_data )
     except Exception as e:
       self._logger.exception( e )
       raise RuntimeError( 'Can\'t jump to definition or declaration.' )
 
 
-  def _GetDoc( self, request_data ):
+  def GetDoc( self, request_data ):
     try:
       definitions = self._GetDefinitionsList( '/gotodefinition',
                                               request_data )
@@ -334,7 +412,7 @@ class JediCompleter( Completer ):
       raise RuntimeError( 'Can\'t find a definition.' )
 
 
-  def _GoToReferences( self, request_data ):
+  def GoToReferences( self, request_data ):
     definitions = self._GetDefinitionsList( '/usages', request_data )
     if not definitions:
       raise RuntimeError( 'Can\'t find references.' )
@@ -343,7 +421,8 @@ class JediCompleter( Completer ):
 
   def _GetDefinitionsList( self, handler, request_data ):
     try:
-      response = self._GetResponse( handler, request_data )
+      request = self._TranslateRequestForJediHTTP( request_data )
+      response = self._GetResponse( handler, request )
       return response[ 'definitions' ]
     except Exception as e:
       self._logger.exception( e )
@@ -384,21 +463,21 @@ class JediCompleter( Completer ):
     return responses.BuildDetailedInfoResponse( '\n---\n'.join( docs ) )
 
 
-  def DebugInfo( self, request_data ):
+  def DebugInfo( self ):
     with self._server_lock:
-      jedihttp_server = responses.DebugInfoServer(
+      python_interpreter_item = responses.DebugInfoItem(
+        key = 'Python interpreter',
+        value = self._interpreter_path )
+
+      project_root_item = responses.DebugInfoItem(
+        key = 'Project root',
+        value = self._project_root )
+
+      return responses.DebugInfoServer(
         name = 'JediHTTP',
         handle = self._jedihttp_phandle,
         executable = PATH_TO_JEDIHTTP,
         address = '127.0.0.1',
         port = self._jedihttp_port,
-        logfiles = [ self._logfile_stdout, self._logfile_stderr ] )
-
-      python_interpreter_item = responses.DebugInfoItem(
-        key = 'Python interpreter',
-        value = self._python_binary_path )
-
-      return responses.BuildDebugInfoResponse(
-        name = 'Python',
-        servers = [ jedihttp_server ],
-        items = [ python_interpreter_item ] )
+        logfiles = [ self._logfile_stdout, self._logfile_stderr ],
+        extras = [ python_interpreter_item, project_root_item ] )

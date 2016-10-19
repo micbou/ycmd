@@ -25,6 +25,7 @@ from builtins import *  # noqa
 from hamcrest.core.base_matcher import BaseMatcher
 from hamcrest import assert_that, has_item, contains, equal_to, is_not  # noqa
 from mock import patch
+import os
 import sys
 
 from ycmd import utils
@@ -79,7 +80,9 @@ def was_called_with_python( python ):
 @IsolatedYcmd()
 @patch( 'ycmd.utils.SafePopen' )
 def UserDefinedPython_WithoutAnyOption_DefaultToYcmdPython_test( app, *args ):
-  app.get( '/ready', { 'subserver': 'python' } )
+  event_notification_request = BuildRequest( filetype = 'python',
+                                             event_name = 'FileReadyToParse' )
+  app.post_json( '/event_notification', event_notification_request )
   assert_that( utils.SafePopen, was_called_with_python( sys.executable ) )
 
 
@@ -88,9 +91,11 @@ def UserDefinedPython_WithoutAnyOption_DefaultToYcmdPython_test( app, *args ):
 @patch( 'ycmd.utils.FindExecutable', return_value = None )
 def UserDefinedPython_WhenNonExistentPythonIsGiven_ReturnAnError_test( app,
                                                                        *args ):
-  response = app.get( '/ready',
-                      { 'subserver': 'python' },
-                      expect_errors = True ).json
+  event_notification_request = BuildRequest( filetype = 'python',
+                                             event_name = 'FileReadyToParse' )
+  response = app.post_json( '/event_notification',
+                            event_notification_request,
+                            expect_errors = True ).json
 
   msg = BINARY_NOT_FOUND_MESSAGE.format( '/non/existing/path/python' )
   assert_that( response, ErrorMatcher( RuntimeError, msg ) )
@@ -101,8 +106,12 @@ def UserDefinedPython_WhenNonExistentPythonIsGiven_ReturnAnError_test( app,
 @patch( 'ycmd.utils.SafePopen' )
 @patch( 'ycmd.utils.FindExecutable', side_effect = lambda x: x )
 def UserDefinedPython_WhenExistingPythonIsGiven_ThatIsUsed_test( app, *args ):
-  app.get( '/ready', { 'subserver': 'python' } ).json
-  assert_that( utils.SafePopen, was_called_with_python( '/existing/python' ) )
+  event_notification_request = BuildRequest( filetype = 'python',
+                                             event_name = 'FileReadyToParse' )
+  app.post_json( '/event_notification', event_notification_request )
+  assert_that(
+      utils.SafePopen,
+      was_called_with_python( os.path.normpath( '/existing/python' ) ) )
 
 
 @IsolatedYcmd()
@@ -125,7 +134,8 @@ def UserDefinedPython_RestartServerWithArgument_WillUseTheSpecifiedPython_test(
   request = BuildRequest( filetype = 'python',
                           command_arguments = [ 'RestartServer', python ] )
   app.post_json( '/run_completer_command', request )
-  assert_that( utils.SafePopen, was_called_with_python( python ) )
+  assert_that( utils.SafePopen,
+               was_called_with_python( os.path.normpath( python ) ) )
 
 
 @IsolatedYcmd()
