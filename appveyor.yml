@@ -25,7 +25,7 @@ environment:
     arch: 64
     python: 35
 install:
-  - ci\appveyor\appveyor_install.bat
+  - ps: ci\appveyor\appveyor_install.ps1
 build_script:
   - python run_tests.py --msvc %MSVC%
 after_build:
