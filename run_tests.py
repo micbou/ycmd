@@ -202,7 +202,8 @@ def NoseTests( parsed_args, extra_nosetests_args ):
     nosetests_args += [ '--with-coverage',
                         '--cover-erase',
                         '--cover-package=ycmd',
-                        '--cover-html' ]
+                        '--cover-html',
+                        '--cover-branch' ]
 
   if extra_nosetests_args:
     nosetests_args.extend( extra_nosetests_args )
