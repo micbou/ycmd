@@ -70,9 +70,9 @@ def SetUpGoCompleter( test ):
   def Wrapper( *args, **kwargs ):
     user_options = user_options_store.DefaultOptions()
     user_options[ 'gocode_binary_path' ] = DUMMY_BINARY
-    with patch( 'ycmd.utils.SafePopen' ):
+    with patch( 'ycmd.completers.go.go_completer.GoCompleter._StartServer' ):
       completer = GoCompleter( user_options )
-      return test( completer, *args, **kwargs )
+    return test( completer, *args, **kwargs )
   return Wrapper
 
 

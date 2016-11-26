@@ -23,11 +23,14 @@ from future import standard_library
 standard_library.install_aliases()
 from builtins import *  # noqa
 
+import contextlib
+import copy
 import json
 import logging
 import os
 import subprocess
 import threading
+import time
 
 from ycmd import responses
 from ycmd import utils
@@ -89,6 +92,15 @@ def FindBinary( binary, user_options ):
   return None
 
 
+def GetGocodeConfig():
+  def GetConfigDirectory():
+    if utils.OnWindows():
+      return os.environ[ 'APPDATA' ]
+    return os.getenv( 'XDG_CONFIG_HOME',
+                      os.path.join( os.environ[ 'HOME' ], '.config' ) )
+  return os.path.join( GetConfigDirectory(), 'gocode', 'config.json' )
+
+
 def ShouldEnableGoCompleter( user_options ):
   def _HasBinary( binary ):
     binary_path = FindBinary( binary, user_options )
@@ -108,18 +120,54 @@ class GoCompleter( Completer ):
   def __init__( self, user_options ):
     super( GoCompleter, self ).__init__( user_options )
     self._gocode_binary_path = FindBinary( 'gocode', user_options )
+    self._gocode_config_path = GetGocodeConfig()
     self._gocode_lock = threading.RLock()
     self._gocode_handle = None
     self._gocode_port = None
     self._gocode_address = None
     self._gocode_stderr = None
     self._gocode_stdout = None
+    # See https://github.com/nsf/gocode#options for the available options.
+    self._gocode_options = {
+      'autobuild': True,
+      'propose-builtins': True,
+      'unimported-packages': True
+    }
 
     self._godef_binary_path = FindBinary( 'godef', user_options )
 
     self._keep_logfiles = user_options[ 'server_keep_logfiles' ]
 
     self._StartServer()
+
+
+  def _GetGocodeOptions( self ):
+    try:
+      return json.loads( utils.ReadFile( self._gocode_config_path ) )
+    # IOError is an alias of OSError in Python 3.
+    except IOError:
+      return {}
+
+
+  def _SetGocodeOptions( self, options ):
+    try:
+      os.makedirs( os.path.dirname( self._gocode_config_path ) )
+    except OSError:
+      pass
+    with open( self._gocode_config_path, 'w' ) as options_file:
+      options_file.write( utils.ToUnicode( json.dumps( options ) ) )
+
+
+  @contextlib.contextmanager
+  def _CustomizeGocodeOptions( self ):
+    old_options = self._GetGocodeOptions()
+    try:
+      custom_options = copy.copy( old_options )
+      custom_options.update( self._gocode_options )
+      self._SetGocodeOptions( custom_options )
+      yield
+    finally:
+      self._SetGocodeOptions( old_options )
 
 
   def SupportedFiletypes( self ):
@@ -222,11 +270,13 @@ class GoCompleter( Completer ):
       self._gocode_stderr = utils.CreateLogfile(
           LOGFILE_FORMAT.format( port = self._gocode_port, std = 'stderr' ) )
 
-      with utils.OpenForStdHandle( self._gocode_stdout ) as stdout:
-        with utils.OpenForStdHandle( self._gocode_stderr ) as stderr:
-          self._gocode_handle = utils.SafePopen( command,
-                                                 stdout = stdout,
-                                                 stderr = stderr )
+      with self._CustomizeGocodeOptions():
+        with utils.OpenForStdHandle( self._gocode_stdout ) as stdout:
+          with utils.OpenForStdHandle( self._gocode_stderr ) as stderr:
+            self._gocode_handle = utils.SafePopen( command,
+                                                   stdout = stdout,
+                                                   stderr = stderr )
+        self._WaitUntilServerIsReady()
 
 
   def _StopServer( self ):
@@ -332,6 +382,17 @@ class GoCompleter( Completer ):
   def ServerIsReady( self ):
     """Check if the Gocode server is ready. Same as the healthy status."""
     return self.ServerIsHealthy()
+
+
+  def _WaitUntilServerIsReady( self, timeout = 5 ):
+    expiration = time.time() + timeout
+    while True:
+      if time.time() > expiration:
+        raise RuntimeError( 'Waited for the Gocode server to be ready '
+                            'for {0} seconds, aborting.'.format( timeout ) )
+      if self.ServerIsReady():
+        return
+      time.sleep( 0.1 )
 
 
   def DebugInfo( self, request_data ):
