@@ -98,7 +98,20 @@ def BuildDetailedInfoResponse( text ):
   }
 
 
+def BuildCompletionChunk( text, placeholder = False, chunks = None ):
+  chunk = {
+    'text': text,
+    'placeholder': placeholder
+  }
+
+  if chunks:
+    chunk[ 'chunks' ] = chunks
+
+  return chunk
+
+
 def BuildCompletionData( insertion_text,
+                         chunks = None,
                          extra_menu_info = None,
                          detailed_info = None,
                          menu_text = None,
@@ -108,6 +121,8 @@ def BuildCompletionData( insertion_text,
     'insertion_text': insertion_text
   }
 
+  if chunks:
+    completion_data[ 'chunks' ] = chunks
   if extra_menu_info:
     completion_data[ 'extra_menu_info' ] = extra_menu_info
   if menu_text:

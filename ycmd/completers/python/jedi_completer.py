@@ -28,7 +28,11 @@ standard_library.install_aliases()
 
 from ycmd.utils import ToBytes, ToUnicode, ProcessIsRunning
 from ycmd.completers.completer import Completer
-from ycmd import responses, utils, hmac_utils
+from ycmd import utils, hmac_utils
+from ycmd.responses import ( BuildCompletionChunk, BuildCompletionData,
+                             BuildGoToResponse,
+                             BuildDescriptionOnlyGoToResponse,
+                             BuildDetailedInfoResponse )
 from tempfile import NamedTemporaryFile
 
 from base64 import b64encode
@@ -37,6 +41,7 @@ import logging
 import urllib.parse
 import requests
 import threading
+import re
 import sys
 import os
 
@@ -49,6 +54,8 @@ LOGFILE_FORMAT = 'jedihttp_{port}_{std}_'
 PATH_TO_JEDIHTTP = os.path.abspath(
   os.path.join( os.path.dirname( __file__ ), '..', '..', '..',
                 'third_party', 'JediHTTP', 'jedihttp.py' ) )
+
+NAMED_PARAMETER = re.compile( r'\s*(?P<name>\S+\s*=\s*)(?P<value>\S+)\s*' )
 
 
 class JediCompleter( Completer ):
@@ -262,12 +269,66 @@ class JediCompleter( Completer ):
         return None
 
 
+  def _BuildParameterChunks( self, description, comma = True ):
+    chunks = []
+    match = NAMED_PARAMETER.match( description )
+    if match:
+      name = match.group( 'name' )
+      value = match.group( 'value' )
+      if comma:
+        name = ', ' + name
+      chunks.append( BuildCompletionChunk( name, False ) )
+      chunks.append( BuildCompletionChunk( value, True ) )
+    return chunks
+
+
+  # TODO: Handle *args and **kwargs arguments.
+  def _BuildCompletionChunks( self, completion ):
+    chunks = []
+
+    completion_type = completion[ 'type' ]
+    self._logger.debug( completion )
+    if completion_type not in [ 'function', 'class' ]:
+      return chunks
+
+    name = completion[ 'name' ]
+    chunks.append( BuildCompletionChunk( name + '(' ) )
+
+    parameters = completion[ 'params' ]
+    if parameters:
+      description = parameters[ 0 ][ 'description' ]
+      parameter_chunks = self._BuildParameterChunks( description, False )
+      chunks.append( BuildCompletionChunk( description,
+                                           True,
+                                           parameter_chunks ) )
+      for parameter in parameters[ 1: ]:
+        description = parameter[ 'description' ]
+        parameter_chunks = self._BuildParameterChunks( description )
+        if parameter_chunks:
+          chunks.append( BuildCompletionChunk( ', ' + description,
+                                               True,
+                                               parameter_chunks ) )
+        else:
+          chunks.append( BuildCompletionChunk( ', ' ) )
+          chunks.append( BuildCompletionChunk( description, True ) )
+
+    chunks.append( BuildCompletionChunk( ')' ) )
+    return chunks
+
+
+  def _BuildCompletionData( self, completion ):
+    self._logger.debug( completion )
+    chunks = self._BuildCompletionChunks( completion )
+    self._logger.debug( chunks )
+
+    return BuildCompletionData( completion[ 'name' ],
+                                chunks = chunks,
+                                extra_menu_info = completion[ 'description' ],
+                                detailed_info = completion[ 'docstring' ] )
+
+
   def ComputeCandidatesInner( self, request_data ):
-    return [ responses.BuildCompletionData(
-                completion[ 'name' ],
-                completion[ 'description' ],
-                completion[ 'docstring' ],
-                extra_data = self._GetExtraData( completion ) )
+    return [ self._BuildCompletionData( completion )
              for completion in self._JediCompletions( request_data ) ]
 
 
@@ -361,28 +422,28 @@ class JediCompleter( Completer ):
         else:
           raise RuntimeError( 'Builtin modules cannot be displayed.' )
       else:
-        return responses.BuildGoToResponse( definition[ 'module_path' ],
-                                            definition[ 'line' ],
-                                            definition[ 'column' ] + 1 )
+        return BuildGoToResponse( definition[ 'module_path' ],
+                                  definition[ 'line' ],
+                                  definition[ 'column' ] + 1 )
     else:
       # multiple definitions
       defs = []
       for definition in definition_list:
         if definition[ 'in_builtin_module' ]:
-          defs.append( responses.BuildDescriptionOnlyGoToResponse(
-                       'Builtin ' + definition[ 'description' ] ) )
+          defs.append( BuildDescriptionOnlyGoToResponse(
+            'Builtin ' + definition[ 'description' ] ) )
         else:
           defs.append(
-            responses.BuildGoToResponse( definition[ 'module_path' ],
-                                         definition[ 'line' ],
-                                         definition[ 'column' ] + 1,
-                                         definition[ 'description' ] ) )
+            BuildGoToResponse( definition[ 'module_path' ],
+                               definition[ 'line' ],
+                               definition[ 'column' ] + 1,
+                               definition[ 'description' ] ) )
       return defs
 
 
   def _BuildDetailedInfoResponse( self, definition_list ):
     docs = [ definition[ 'docstring' ] for definition in definition_list ]
-    return responses.BuildDetailedInfoResponse( '\n---\n'.join( docs ) )
+    return BuildDetailedInfoResponse( '\n---\n'.join( docs ) )
 
 
   def DebugInfo( self, request_data ):
