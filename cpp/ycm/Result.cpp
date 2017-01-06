@@ -60,21 +60,21 @@ int LongestCommonSubsequenceLength( const std::string &first,
   const std::string &longer  = first.size() > second.size() ? first  : second;
   const std::string &shorter = first.size() > second.size() ? second : first;
 
-  int longer_len  = longer.size();
-  int shorter_len = shorter.size();
+  size_t longer_len  = longer.size();
+  size_t shorter_len = shorter.size();
 
   std::vector<int> previous( shorter_len + 1, 0 );
   std::vector<int> current(  shorter_len + 1, 0 );
 
-  for ( int i = 0; i < longer_len; ++i ) {
-    for ( int j = 0; j < shorter_len; ++j ) {
+  for ( size_t i = 0; i < longer_len; ++i ) {
+    for ( size_t j = 0; j < shorter_len; ++j ) {
       if ( toupper( longer[ i ] ) == toupper( shorter[ j ] ) )
         current[ j + 1 ] = previous[ j ] + 1;
       else
         current[ j + 1 ] = std::max( current[ j ], previous[ j + 1 ] );
     }
 
-    for ( int j = 0; j < shorter_len; ++j ) {
+    for ( size_t j = 0; j < shorter_len; ++j ) {
       previous[ j + 1 ] = current[ j + 1 ];
     }
   }

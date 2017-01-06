@@ -33,15 +33,17 @@ LetterNode::LetterNode( const std::string &text )
 
   letternode_per_text_index_.reserve( text.size() );
 
-  for ( uint i = 0; i < text.size(); ++i ) {
-    letternode_per_text_index_.push_back( LetterNode( text[ i ], i ) );
-    SetNodeIndexForLetterIfNearest( text[ i ], i );
+  for ( size_t i = 0; i < text.size(); ++i ) {
+    letternode_per_text_index_.push_back( LetterNode( text[ i ],
+                                                      static_cast<int>( i ) ) );
+    SetNodeIndexForLetterIfNearest( text[ i ], static_cast<short>( i ) );
   }
 
   for ( size_t i = 0; i < text.size(); ++i ) {
     for ( size_t j = i + 1; j < text.size(); ++j ) {
-      letternode_per_text_index_[ i ].SetNodeIndexForLetterIfNearest( text[ j ],
-                                                                      j );
+      letternode_per_text_index_[ i ].SetNodeIndexForLetterIfNearest(
+                                        text[ j ],
+                                        static_cast<short>( j ) );
     }
   }
 }

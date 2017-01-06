@@ -41,11 +41,11 @@ namespace {
 std::vector< const Candidate * > CandidatesFromObjectList(
   const pylist &candidates,
   const std::string &candidate_property ) {
-  int num_candidates = len( candidates );
+  size_t num_candidates = len( candidates );
   std::vector< std::string > candidate_strings;
   candidate_strings.reserve( num_candidates );
 
-  for ( int i = 0; i < num_candidates; ++i ) {
+  for ( size_t i = 0; i < num_candidates; ++i ) {
     if ( candidate_property.empty() ) {
       candidate_strings.push_back( GetUtf8String( candidates[ i ] ) );
     } else {
@@ -74,17 +74,17 @@ boost::python::list FilterAndSortCandidates(
   if ( !IsPrintable( query ) )
     return boost::python::list();
 
-  int num_candidates = len( candidates );
+  size_t num_candidates = len( candidates );
   std::vector< const Candidate * > repository_candidates =
     CandidatesFromObjectList( candidates, candidate_property );
 
-  std::vector< ResultAnd< int > > result_and_objects;
+  std::vector< ResultAnd< size_t > > result_and_objects;
   {
     ReleaseGil unlock;
     Bitset query_bitset = LetterBitsetFromString( query );
     bool query_has_uppercase_letters = any_of( query, is_upper() );
 
-    for ( int i = 0; i < num_candidates; ++i ) {
+    for ( size_t i = 0; i < num_candidates; ++i ) {
       const Candidate *candidate = repository_candidates[ i ];
 
       if ( !candidate->MatchesQueryBitset( query_bitset ) )
@@ -94,7 +94,7 @@ boost::python::list FilterAndSortCandidates(
                                                    query_has_uppercase_letters );
 
       if ( result.IsSubsequence() ) {
-        ResultAnd< int > result_and_object( result, i );
+        ResultAnd< size_t > result_and_object( result, i );
         result_and_objects.push_back( boost::move( result_and_object ) );
       }
     }
@@ -102,7 +102,7 @@ boost::python::list FilterAndSortCandidates(
     std::sort( result_and_objects.begin(), result_and_objects.end() );
   }
 
-  foreach ( const ResultAnd< int > &result_and_object,
+  foreach ( const ResultAnd< size_t > &result_and_object,
             result_and_objects ) {
     filtered_candidates.append( candidates[ result_and_object.extra_object_ ] );
   }

@@ -53,7 +53,7 @@ CandidateRepository &CandidateRepository::Instance() {
 }
 
 
-int CandidateRepository::NumStoredCandidates() {
+size_t CandidateRepository::NumStoredCandidates() {
   boost::lock_guard< boost::mutex > locker( holder_mutex_ );
   return candidate_holder_.size();
 }

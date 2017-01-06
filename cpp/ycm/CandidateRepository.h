@@ -48,7 +48,7 @@ class CandidateRepository : boost::noncopyable {
 public:
   YCM_DLL_EXPORT static CandidateRepository &Instance();
 
-  int NumStoredCandidates();
+  size_t NumStoredCandidates();
 
   YCM_DLL_EXPORT std::vector< const Candidate * > GetCandidatesForStrings(
     const std::vector< std::string > &strings );
