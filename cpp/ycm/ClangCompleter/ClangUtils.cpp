@@ -37,11 +37,11 @@ bool CursorIsValid( CXCursor cursor ) {
 }
 
 bool CursorIsReference( CXCursor cursor ) {
-  return clang_isReference( clang_getCursorKind( cursor ) );
+  return clang_isReference( clang_getCursorKind( cursor ) ) != 0;
 }
 
 bool CursorIsDeclaration( CXCursor cursor ) {
-  return clang_isDeclaration( clang_getCursorKind( cursor ) );
+  return clang_isDeclaration( clang_getCursorKind( cursor ) ) != 0;
 }
 
 std::string CXFileToFilepath( CXFile file ) {
