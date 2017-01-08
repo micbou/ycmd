@@ -22,6 +22,7 @@ from __future__ import print_function
 from __future__ import division
 # Not installing aliases from python-future; it's unreliable and slow.
 from builtins import *  # noqa
+from future.utils import iteritems
 
 import bottle
 import json
@@ -55,7 +56,9 @@ _logger = logging.getLogger( __name__ )
 app = bottle.Bottle()
 wsgi_server = None
 
-import cProfile, pstats, StringIO
+import cProfile
+import pstats
+from io import StringIO
 
 _handler_profiles = defaultdict( cProfile.Profile )
 
@@ -222,12 +225,12 @@ def DebugInfo():
   _logger.info( 'Received debug info request' )
 
   # Dump the profiling data to the log
-  for name, profile in _handler_profiles.iteritems():
-    stats = StringIO.StringIO()
+  for name, profile in iteritems( _handler_profiles ):
+    stats = StringIO()
     ps = pstats.Stats( profile, stream = stats ).sort_stats( 'cumulative' )
     ps.print_stats()
     _logger.debug( 'Handler profile for {0}: {1}'.format( name,
-                                                          stats.getvalue() )
+                                                          stats.getvalue() ) )
 
   request_data = RequestWrap( request.json )
 
