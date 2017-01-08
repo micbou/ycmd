@@ -26,43 +26,13 @@ from builtins import *  # noqa
 import ycm_core
 import os
 import inspect
-import re
 from future.utils import PY2, native
 from ycmd import extra_conf_store
+from ycmd.completers.cpp.flags_parser import FlagsParser
 from ycmd.utils import ( ToCppStringCompatible, OnMac, OnWindows, ToUnicode,
                          ToBytes, PathsToAllParentFolders )
 from ycmd.responses import NoExtraConfDetected
 
-
-INCLUDE_FLAGS = [ '-isystem', '-I', '-iquote', '-isysroot', '--sysroot',
-                  '-gcc-toolchain', '-include', '-include-pch', '-iframework',
-                  '-F', '-imacros' ]
-
-# --sysroot= must be first (or at least, before --sysroot) because the latter is
-# a prefix of the former (and the algorithm checks prefixes)
-PATH_FLAGS =  [ '--sysroot=' ] + INCLUDE_FLAGS
-
-# We need to remove --fcolor-diagnostics because it will cause shell escape
-# sequences to show up in editors, which is bad. See Valloric/YouCompleteMe#1421
-STATE_FLAGS_TO_SKIP = set( [ '-c',
-                             '-MP',
-                             '-MD',
-                             '-MMD',
-                             '--fcolor-diagnostics' ] )
-
-# The -M* flags spec:
-#   https://gcc.gnu.org/onlinedocs/gcc-4.9.0/gcc/Preprocessor-Options.html
-FILE_FLAGS_TO_SKIP = set( [ '-MF',
-                            '-MT',
-                            '-MQ',
-                            '-o',
-                            '--serialize-diagnostics' ] )
-
-# Use a regex to correctly detect c++/c language for both versioned and
-# non-versioned compiler executable names suffixes
-# (e.g., c++, g++, clang++, g++-4.9, clang++-3.7, c++-10.2 etc).
-# See Valloric/ycmd#266
-CPP_COMPILER_REGEX = re.compile( r'\+\+(-\d+(\.\d+){0,2})?$' )
 
 # List of file extensions to be considered "header" files and thus not present
 # in the compilation database. The logic will try and find an associated
@@ -77,6 +47,9 @@ EMPTY_FLAGS = {
   'flags': [],
 }
 
+CLANG_INCLUDES_PATH = os.path.join( os.path.dirname( ycm_core.__file__ ),
+                                    'clang_includes' )
+
 
 class NoCompilationDatabase( Exception ):
   pass
@@ -90,7 +63,7 @@ class Flags( object ):
   def __init__( self ):
     # It's caches all the way down...
     self.flags_for_file = {}
-    self.extra_clang_flags = _ExtraClangFlags()
+    self.mac_include_paths = _MacIncludePaths()
     self.no_extra_conf_file_warning_posted = False
 
     # We cache the compilation database for any given source directory
@@ -136,16 +109,16 @@ class Flags( object ):
     if not results or not results.get( 'flags_ready', True ):
       return None
 
-    flags = _ExtractFlagsList( results )
-    if not flags:
+    flags, working_directory = _ExtractFlagsListAndWorkingDirectory( results )
+    if not flags or not working_directory:
       return None
 
-    if add_extra_clang_flags:
-      flags += self.extra_clang_flags
+    flags = FlagsParser( flags, working_directory ).Parse()
 
-    sanitized_flags = PrepareFlagsForClang( flags,
-                                            filename,
-                                            add_extra_clang_flags )
+    if add_extra_clang_flags:
+      flags = _ExtraClangFlags( flags )
+
+    sanitized_flags = PrepareFlagsForClang( flags )
 
     if results.get( 'do_cache', True ):
       self.flags_for_file[ filename ] = sanitized_flags
@@ -155,7 +128,6 @@ class Flags( object ):
   def _GetFlagsFromExtraConfOrDatabase( self, module, filename, client_data ):
     if not module:
       return self._GetFlagsFromCompilationDatabase( filename )
-
     return _CallExtraConfFlagsForFile( module, filename, client_data )
 
 
@@ -233,9 +205,8 @@ class Flags( object ):
     self.file_directory_heuristic_map.setdefault( file_dir, compilation_info )
 
     return {
-      'flags': _MakeRelativePathsInFlagsAbsolute(
-        compilation_info.compiler_flags_,
-        compilation_info.compiler_working_dir_ ),
+      'flags': compilation_info.compiler_flags_,
+      'working_directory': compilation_info.compiler_working_dir_
     }
 
 
@@ -271,8 +242,10 @@ class Flags( object ):
     raise NoCompilationDatabase
 
 
-def _ExtractFlagsList( flags_for_file_output ):
-  return [ ToUnicode( x ) for x in flags_for_file_output[ 'flags' ] ]
+def _ExtractFlagsListAndWorkingDirectory( flags_for_file_output ):
+  flags = [ ToUnicode( x ) for x in flags_for_file_output.get( 'flags', [] ) ]
+  working_directory = flags_for_file_output.get( 'working_directory' )
+  return flags, working_directory
 
 
 def _CallExtraConfFlagsForFile( module, filename, client_data ):
@@ -291,129 +264,18 @@ def _CallExtraConfFlagsForFile( module, filename, client_data ):
   # For the sake of backwards compatibility, we need to first check whether the
   # FlagsForFile function in the extra conf module even allows keyword args.
   if inspect.getargspec( module.FlagsForFile ).keywords:
-    return module.FlagsForFile( filename, client_data = client_data )
+    flags_for_file = module.FlagsForFile( filename, client_data = client_data )
   else:
-    return module.FlagsForFile( filename )
+    flags_for_file = module.FlagsForFile( filename )
+  flags_for_file[ 'working_directory' ] = os.path.dirname( module.__file__ )
+  return flags_for_file
 
 
-def PrepareFlagsForClang( flags, filename, add_extra_clang_flags = True ):
-  flags = _AddLanguageFlagWhenAppropriate( flags )
-  flags = _RemoveXclangFlags( flags )
-  flags = _RemoveUnusedFlags( flags, filename )
-  if add_extra_clang_flags:
-    flags = _EnableTypoCorrection( flags )
-
+def PrepareFlagsForClang( flags ):
   vector = ycm_core.StringVector()
   for flag in flags:
     vector.append( ToCppStringCompatible( flag ) )
   return vector
-
-
-def _RemoveXclangFlags( flags ):
-  """Drops -Xclang flags.  These are typically used to pass in options to
-  clang cc1 which are not used in the front-end, so they are not needed for
-  code completion."""
-
-  sanitized_flags = []
-  saw_xclang = False
-  for i, flag in enumerate( flags ):
-    if flag == '-Xclang':
-      saw_xclang = True
-      continue
-    elif saw_xclang:
-      saw_xclang = False
-      continue
-
-    sanitized_flags.append( flag )
-
-  return sanitized_flags
-
-
-def _RemoveFlagsPrecedingCompiler( flags ):
-  """Assuming that the flag just before the first flag (which starts with a
-  dash) is the compiler path, removes all flags preceding it."""
-
-  for index, flag in enumerate( flags ):
-    if flag.startswith( '-' ):
-      return ( flags[ index - 1: ] if index > 1 else
-               flags )
-  return flags[ :-1 ]
-
-
-def _AddLanguageFlagWhenAppropriate( flags ):
-  """When flags come from the compile_commands.json file, the flag preceding the
-  first flag starting with a dash is usually the path to the compiler that
-  should be invoked. Since LibClang does not deduce the language from the
-  compiler name, we explicitely set the language to C++ if the compiler is a C++
-  one (g++, clang++, etc.). Otherwise, we let LibClang guess the language from
-  the file extension. This handles the case where the .h extension is used for
-  C++ headers."""
-
-  flags = _RemoveFlagsPrecedingCompiler( flags )
-
-  # First flag is now the compiler path or a flag starting with a dash.
-  first_flag = flags[ 0 ]
-
-  if ( not first_flag.startswith( '-' ) and
-       CPP_COMPILER_REGEX.search( first_flag ) ):
-    return [ first_flag, '-x', 'c++' ] + flags[ 1: ]
-  return flags
-
-
-def _RemoveUnusedFlags( flags, filename ):
-  """Given an iterable object that produces strings (flags for Clang), removes
-  the '-c' and '-o' options that Clang does not like to see when it's producing
-  completions for a file. Same for '-MD' etc.
-
-  We also try to remove any stray filenames in the flags that aren't include
-  dirs."""
-
-  new_flags = []
-
-  # When flags come from the compile_commands.json file, the first flag is
-  # usually the path to the compiler that should be invoked. Directly move it to
-  # the new_flags list so it doesn't get stripped of in the loop below.
-  if not flags[ 0 ].startswith( '-' ):
-    new_flags = flags[ :1 ]
-    flags = flags[ 1: ]
-
-  skip_next = False
-  previous_flag_is_include = False
-  previous_flag_starts_with_dash = False
-  current_flag_starts_with_dash = False
-
-  for flag in flags:
-    previous_flag_starts_with_dash = current_flag_starts_with_dash
-    current_flag_starts_with_dash = flag.startswith( '-' )
-
-    if skip_next:
-      skip_next = False
-      continue
-
-    if flag in STATE_FLAGS_TO_SKIP:
-      continue
-
-    if flag in FILE_FLAGS_TO_SKIP:
-      skip_next = True
-      continue
-
-    if flag == filename or os.path.realpath( flag ) == filename:
-      continue
-
-    # We want to make sure that we don't have any stray filenames in our flags;
-    # filenames that are part of include flags are ok, but others are not. This
-    # solves the case where we ask the compilation database for flags for
-    # "foo.cpp" when we are compiling "foo.h" because the comp db doesn't have
-    # flags for headers. The returned flags include "foo.cpp" and we need to
-    # remove that.
-    if ( not current_flag_starts_with_dash and
-          ( not previous_flag_starts_with_dash or
-            ( not previous_flag_is_include and '/' in flag ) ) ):
-      continue
-
-    new_flags.append( flag )
-    previous_flag_is_include = flag in INCLUDE_FLAGS
-  return new_flags
 
 
 # There are 2 ways to get a development enviornment (as standard) on OS X:
@@ -472,9 +334,13 @@ def _LatestMacClangIncludes():
   return []
 
 
-MAC_INCLUDE_PATHS = []
 
-if OnMac():
+
+def _MacIncludePaths():
+  flags = []
+  if not OnMac():
+    return flags
+
   # These are the standard header search paths that clang will use on Mac BUT
   # libclang won't, for unknown reasons. We add these paths when the user is on
   # a Mac because if we don't, libclang would fail to find <vector> etc.  This
@@ -483,36 +349,25 @@ if OnMac():
   # See the following for details:
   #  - Valloric/YouCompleteMe#303
   #  - Valloric/YouCompleteMe#2268
-  MAC_INCLUDE_PATHS = (
-    _PathsForAllMacToolchains( 'usr/include/c++/v1' ) +
-    [ '/usr/local/include' ] +
-    _PathsForAllMacToolchains( 'usr/include' ) +
-    [ '/usr/include', '/System/Library/Frameworks', '/Library/Frameworks' ] +
-    _LatestMacClangIncludes() +
-    # We include the MacOS platform SDK because some meaningful parts of the
-    # standard library are located there. If users are compiling for (say)
-    # iPhone.platform, etc. they should appear earlier in the include path.
-    [ '/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/'
-      'Developer/SDKs/MacOSX.sdk/usr/include' ]
-  )
+  for path in (
+      _PathsForAllMacToolchains( 'usr/include/c++/v1' ) +
+      [ '/usr/local/include' ] +
+      _PathsForAllMacToolchains( 'usr/include' ) +
+      [ '/usr/include', '/System/Library/Frameworks', '/Library/Frameworks' ] +
+      _LatestMacClangIncludes() +
+      # We include the MacOS platform SDK because some meaningful parts of the
+      # standard library are located there. If users are compiling for (say)
+      # iPhone.platform, etc. they should appear earlier in the include path.
+      [ '/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/'
+        'Developer/SDKs/MacOSX.sdk/usr/include' ] ):
+    flags.extend( [ '-isystem', path ] )
+  return flags
 
 
-def _ExtraClangFlags():
-  flags = _SpecialClangIncludes()
-  if OnMac():
-    for path in MAC_INCLUDE_PATHS:
-      flags.extend( [ '-isystem', path ] )
-  # On Windows, parsing of templates is delayed until instantiation time.
-  # This makes GetType and GetParent commands fail to return the expected
-  # result when the cursor is in a template.
-  # Using the -fno-delayed-template-parsing flag disables this behavior.
-  # See
-  # http://clang.llvm.org/extra/PassByValueTransform.html#note-about-delayed-template-parsing # noqa
-  # for an explanation of the flag and
-  # https://code.google.com/p/include-what-you-use/source/detail?r=566
-  # for a similar issue.
-  if OnWindows():
-    flags.append( '-fno-delayed-template-parsing' )
+def _ExtraClangFlags( flags ):
+  flags = _EnableTypoCorrection( flags )
+  flags = _AddClangIncludes( flags )
+  flags = _AddNoDelayedTemplateParsingFlag( flags )
   return flags
 
 
@@ -534,46 +389,26 @@ def _EnableTypoCorrection( flags ):
   return flags
 
 
-def _SpecialClangIncludes():
-  libclang_dir = os.path.dirname( ycm_core.__file__ )
-  path_to_includes = os.path.join( libclang_dir, 'clang_includes' )
-  return [ '-resource-dir=' + path_to_includes ]
+def _AddClangIncludes( flags ):
+  # -resource-dir flag is not available in CL mode so we use the /I flag
+  # instead.
+  if not _IsInClMode( flags ):
+    return flags + [ '-resource-dir=' + CLANG_INCLUDES_PATH ]
+  return flags + [ '/I', os.path.join( CLANG_INCLUDES_PATH, 'include' ) ]
 
 
-def _MakeRelativePathsInFlagsAbsolute( flags, working_directory ):
-  if not working_directory:
-    return list( flags )
-  new_flags = []
-  make_next_absolute = False
-  for flag in flags:
-    new_flag = flag
-
-    if make_next_absolute:
-      make_next_absolute = False
-      if not os.path.isabs( new_flag ):
-        new_flag = os.path.join( working_directory, flag )
-      new_flag = os.path.normpath( new_flag )
-    else:
-      for path_flag in PATH_FLAGS:
-        # Single dash argument alone, e.g. -isysroot <path>
-        if flag == path_flag:
-          make_next_absolute = True
-          break
-
-        # Single dash argument with inbuilt path, e.g. -isysroot<path>
-        # or double-dash argument, e.g. --isysroot=<path>
-        if flag.startswith( path_flag ):
-          path = flag[ len( path_flag ): ]
-          if not os.path.isabs( path ):
-            path = os.path.join( working_directory, path )
-          path = os.path.normpath( path )
-
-          new_flag = '{0}{1}'.format( path_flag, path )
-          break
-
-    if new_flag:
-      new_flags.append( new_flag )
-  return new_flags
+def _AddNoDelayedTemplateParsingFlag( flags ):
+  # On Windows, parsing of templates is delayed until instantiation time.
+  # This makes GetType and GetParent commands fail to return the expected
+  # result when the cursor is in a template.
+  # Using the -fno-delayed-template-parsing flag disables this behavior.
+  # See http://clang.llvm.org/extra/PassByValueTransform.html#note-about-delayed-template-parsing # noqa
+  # for an explanation of the flag and
+  # https://code.google.com/p/include-what-you-use/source/detail?r=566
+  # for a similar issue.
+  if OnWindows() and not _IsInClMode( flags ):
+    flags.append( '-fno-delayed-template-parsing' )
+  return flags
 
 
 # Find the compilation info structure from the supplied database for the
@@ -602,3 +437,7 @@ def _GetCompilationInfoForFile( database, file_name, file_extension ):
     return compilation_info
 
   return None
+
+
+def _IsInClMode( flags ):
+  return '--driver-mode=cl' in flags
