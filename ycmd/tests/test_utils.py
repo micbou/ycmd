@@ -215,6 +215,7 @@ def WaitUntilCompleterServerReady( app, filetype ):
   while retries > 0:
     result = app.get( '/ready', { 'subserver': filetype } ).json
     if result:
+      print( '{0} subserver ready in {1} retries'.format( filetype, retries ) )
       return
 
     time.sleep( 0.2 )

@@ -126,6 +126,8 @@ def ParseArguments():
   parser.add_argument( '--dump-path', action = 'store_true',
                        help = 'Dump the PYTHONPATH required to run tests '
                               'manually, then exit.' )
+  parser.add_argument( '--runs', type = int, default = 1,
+                       help = 'Number of runs.' )
 
   parsed_args, nosetests_args = parser.parse_known_args()
 
@@ -208,7 +210,9 @@ def NoseTests( parsed_args, extra_nosetests_args ):
   else:
     nosetests_args.append( p.join( DIR_OF_THIS_SCRIPT, 'ycmd' ) )
 
-  subprocess.check_call( [ 'nosetests' ] + nosetests_args )
+  for run in range( 1, parsed_args.runs + 1 ):
+    print( "Starting run {0}.".format( run ) )
+    subprocess.check_call( [ 'nosetests' ] + nosetests_args )
 
 
 def Main():

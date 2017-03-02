@@ -183,6 +183,7 @@ class GoCompleter( Completer ):
 
     It is used to send a command to the Gocode daemon or execute the Godef
     binary."""
+    _logger.debug( 'Command: {0}'.format( command ) )
     phandle = utils.SafePopen( command,
                                stdin = subprocess.PIPE,
                                stdout = subprocess.PIPE,
@@ -204,15 +205,17 @@ class GoCompleter( Completer ):
   def _StartServer( self ):
     """Start the Gocode server."""
     with self._gocode_lock:
-      _logger.info( 'Starting Gocode server' )
+      _logger.debug( 'Starting Gocode server' )
 
       self._gocode_port = utils.GetUnusedLocalhostPort()
       self._gocode_host = '127.0.0.1:{0}'.format( self._gocode_port )
+      _logger.debug( 'Port: {0}'.format( self._gocode_port ) )
 
       command = [ self._gocode_binary_path,
                   '-s',
                   '-sock', 'tcp',
                   '-addr', self._gocode_host ]
+      _logger.debug( 'Command: {0}'.format( command ) )
 
       if _logger.isEnabledFor( logging.DEBUG ):
         command.append( '-debug' )
@@ -313,7 +316,9 @@ class GoCompleter( Completer ):
 
   def ServerIsHealthy( self ):
     """Check if the Gocode server is healthy (up and serving)."""
+    _logger.debug( 'Check if server is healthy' )
     if not self._ServerIsRunning():
+      _logger.debug( 'Not healthy' )
       return False
 
     try:
@@ -321,11 +326,13 @@ class GoCompleter( Completer ):
                               '-sock', 'tcp',
                               '-addr', self._gocode_host,
                               'status' ] )
+      _logger.debug( 'Healthy' )
       return True
     # We catch this exception type and not a more specific one because we
     # raise it in _ExecuteCommand when the command fails.
     except RuntimeError as error:
       _logger.exception( error )
+      _logger.debug( 'Not healthy' )
       return False
 
 

@@ -7,4 +7,4 @@ if %msvc% == 2013 (
   set msvc=15
 )
 
-python run_tests.py --msvc %msvc%
+python run_tests.py --msvc %msvc% --completers cs -- ycmd/tests/shutdown_test.py:Shutdown_test.WaitForCsServer_test

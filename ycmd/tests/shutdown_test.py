@@ -22,12 +22,30 @@ from __future__ import absolute_import
 # Not installing aliases from python-future; it's unreliable and slow.
 from builtins import *  # noqa
 
+import time
 from hamcrest import assert_that, equal_to
 
 from ycmd.tests.client_test import Client_test
 
 
 class Shutdown_test( Client_test ):
+
+  @Client_test.CaptureLogfiles
+  def WaitForCsServer_test( self ):
+    nb = 10
+    total_time = 0
+    for i in range( nb ):
+      self.Start()
+      tic = time.time()
+      self.StartSubserverForFiletype( 'cs' )
+      toc = time.time() - tic
+      print( 'C# server ready in {0} seconds.'.format( toc ) )
+      total_time += toc
+      self.PostRequest( 'shutdown' )
+      self.AssertServersShutDown( timeout = 5 )
+    raise RuntimeError( 'Average time for C# server to be ready: {0}.'.format(
+        total_time / nb ) )
+
 
   @Client_test.CaptureLogfiles
   def FromHandlerWithoutSubserver_test( self ):
