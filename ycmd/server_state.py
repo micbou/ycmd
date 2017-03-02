@@ -104,6 +104,15 @@ class ServerState( object ):
       return False
 
 
+  def FiletypeDiagnosticsAvailable( self, filetypes ):
+    try:
+      completer = self.GetFiletypeCompleter( filetypes )
+      return completer.DiagnosticsAvailable()
+    except Exception as e:
+      _logger.exception( e )
+      return False
+
+
   def FiletypeCompletionUsable( self, filetypes ):
     return ( self.CurrentFiletypeCompletionEnabled( filetypes ) and
              self.FiletypeCompletionAvailable( filetypes ) )

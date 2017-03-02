@@ -83,6 +83,10 @@ class CsharpCompleter( Completer ):
     return [ 'cs' ]
 
 
+  def DiagnosticsAvailable( self ):
+    return True
+
+
   def _GetSolutionCompleter( self, request_data ):
     """ Get the solution completer or create a new one if it does not already
     exist. Use a lock to avoid creating the same solution completer multiple

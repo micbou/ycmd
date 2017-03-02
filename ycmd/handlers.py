@@ -165,6 +165,13 @@ def FiletypeCompletionAvailable():
       RequestWrap( request.json )[ 'filetypes' ] ) )
 
 
+@app.post( '/diagnostics_available' )
+def FiletypeDiagnosticsAvailable():
+  _logger.info( 'Received filetype diagnostics available request' )
+  return _JsonResponse( _server_state.FiletypeDiagnosticsAvailable(
+      RequestWrap( request.json )[ 'filetypes' ] ) )
+
+
 @app.post( '/defined_subcommands' )
 def DefinedSubcommands():
   _logger.info( 'Received defined subcommands request' )

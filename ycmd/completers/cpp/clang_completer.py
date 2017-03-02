@@ -66,6 +66,10 @@ class ClangCompleter( Completer ):
     return CLANG_FILETYPES
 
 
+  def DiagnosticsAvailable( self ):
+    return True
+
+
   def GetUnsavedFilesVector( self, request_data ):
     files = ycm_core.UnsavedFileVector()
     for filename, file_data in iteritems( request_data[ 'file_data' ] ):

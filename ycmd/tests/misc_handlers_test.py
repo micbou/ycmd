@@ -25,6 +25,7 @@ from builtins import *  # noqa
 
 from hamcrest import ( any_of, assert_that, contains, empty, equal_to,
                        has_entries, instance_of )
+from mock import patch
 import requests
 
 from ycmd.tests import IsolatedYcmd, PathToTestFile, SharedYcmd
@@ -60,6 +61,26 @@ def MiscHandlers_SemanticCompletionAvailable_test( app ):
   with PatchCompleter( DummyCompleter, filetype = 'dummy_filetype' ):
     request_data = BuildRequest( filetype = 'dummy_filetype' )
     assert_that( app.post_json( '/semantic_completion_available',
+                                request_data ).json,
+                 equal_to( True ) )
+
+
+@SharedYcmd
+def MiscHandlers_DiagnosticsAvailable_NoDiagnosticsByDefault_test( app ):
+  with PatchCompleter( DummyCompleter, filetype = 'dummy_filetype' ):
+    request_data = BuildRequest( filetype = 'dummy_filetype' )
+    assert_that( app.post_json( '/diagnostics_available',
+                                request_data ).json,
+                 equal_to( False ) )
+
+
+@SharedYcmd
+@patch( 'ycmd.tests.test_utils.DummyCompleter.DiagnosticsAvailable',
+        return_value = True )
+def MiscHandlers_DiagnosticsAvailable_SupportDiagnostics_test( app, *args ):
+  with PatchCompleter( DummyCompleter, filetype = 'dummy_filetype' ):
+    request_data = BuildRequest( filetype = 'dummy_filetype' )
+    assert_that( app.post_json( '/diagnostics_available',
                                 request_data ).json,
                  equal_to( True ) )
 

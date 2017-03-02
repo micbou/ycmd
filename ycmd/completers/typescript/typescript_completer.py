@@ -395,6 +395,10 @@ class TypeScriptCompleter( Completer ):
     return [ 'typescript' ]
 
 
+  def DiagnosticsAvailable( self ):
+    return True
+
+
   def ComputeCandidatesInner( self, request_data ):
     self._Reload( request_data )
     entries = self._SendRequest( 'completions', {

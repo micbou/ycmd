@@ -142,6 +142,12 @@ class Completer( with_metaclass( abc.ABCMeta, object ) ):
   and the methods of your completer. See the documentation of this method for
   more informations on how to implement it.
 
+  For adding diagnostics support to your completer, you need to return a list of
+  diagnostics on the OnFileReadyToParse method using the
+  responses.BuildDiagnosticData function, implement the GetDetailedDiagnostic
+  function using the responses.BuildDisplayMessageResponse function, and set the
+  return value of DiagnosticsAvailable to True.
+
   Override the Shutdown() member function if your Completer subclass needs to do
   custom cleanup logic on server shutdown.
 
@@ -339,10 +345,6 @@ class Completer( with_metaclass( abc.ABCMeta, object ) ):
     pass # pragma: no cover
 
 
-  def GetDiagnosticsForCurrentFile( self, request_data ):
-    raise NoDiagnosticSupport
-
-
   def GetDetailedDiagnostic( self, request_data ):
     raise NoDiagnosticSupport
 
@@ -360,6 +362,10 @@ class Completer( with_metaclass( abc.ABCMeta, object ) ):
   @abc.abstractmethod
   def SupportedFiletypes( self ):
     return set()
+
+
+  def DiagnosticsAvailable( self ):
+    return False
 
 
   def DebugInfo( self, request_data ):
