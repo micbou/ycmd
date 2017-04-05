@@ -753,7 +753,7 @@ def _ConvertDetailedCompletionData( completion_data, padding = 0 ):
   signature = ''.join( [ p[ 'text' ] for p in display_parts ] )
 
   # needed to strip new lines and indentation from the signature
-  signature = re.sub( '\s+', ' ', signature )
+  signature = re.sub( r'\s+', ' ', signature )
   menu_text = '{0} {1}'.format( name.ljust( padding ), signature )
   return responses.BuildCompletionData(
     insertion_text = name,

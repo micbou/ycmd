@@ -31,11 +31,11 @@ import sys
 CORE_MISSING_ERROR_REGEX = re.compile( "No module named '?ycm_core'?" )
 CORE_PYTHON2_ERROR_REGEX = re.compile(
   'dynamic module does not define (?:init|module export) '
-  'function \(PyInit_ycm_core\)|'
-  'Module use of python2[0-9].dll conflicts with this version of Python\.$' )
+  r'function \(PyInit_ycm_core\)|'
+  r'Module use of python2[0-9].dll conflicts with this version of Python\.$' )
 CORE_PYTHON3_ERROR_REGEX = re.compile(
-  'dynamic module does not define init function \(initycm_core\)|'
-  'Module use of python3[0-9].dll conflicts with this version of Python\.$' )
+  r'dynamic module does not define init function \(initycm_core\)|'
+  r'Module use of python3[0-9].dll conflicts with this version of Python\.$' )
 
 CORE_MISSING_MESSAGE = (
   'ycm_core library not detected; you need to compile it by running the '

@@ -31,13 +31,13 @@ COMMENT_AND_STRING_REGEX = re.compile(
   "|"
   "#.*?$"  # Anything following '#'
   "|"
-  "/\*(?:\n|.)*?\*/"  # C-style comments, '/* ... */'
+  r"/\*(?:\n|.)*?\*/"  # C-style comments, '/* ... */'
   "|"
   # Python-style multi-line single-quote string
-  "'''(?:\n|.)*?'''"
+  r"'''(?:\n|.)*?'''"
   "|"
   # Python-style multi-line double-quote string
-  '"""(?:\n|.)*?"""'
+  r'"""(?:\n|.)*?"""'
   "|"
   # Anything inside single quotes, '...', but mind:
   #  1. that the starting single quote is not escaped

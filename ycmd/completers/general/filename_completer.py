@@ -50,7 +50,7 @@ class FilenameCompleter( Completer ):
     # On Windows, backslashes are also valid path separators.
     self._triggers = [ '/', '\\' ] if OnWindows() else [ '/' ]
 
-    self._path_regex = re.compile( """
+    self._path_regex = re.compile( r"""
       # Head part
       (?:
         # 'D:/'-like token
