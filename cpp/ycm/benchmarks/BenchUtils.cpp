@@ -19,6 +19,13 @@
 
 namespace YouCompleteMe {
 
+namespace fs = boost::filesystem;
+
+boost::filesystem::path PathToBenchFile( const std::string &filepath ) {
+  fs::path path_to_benchdata = fs::current_path() / fs::path( "benchdata" );
+  return path_to_benchdata / fs::path( filepath );
+}
+
 std::vector< std::string > GenerateCandidatesWithCommonPrefix(
   const std::string prefix, int number ) {
 

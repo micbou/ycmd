@@ -429,6 +429,7 @@ def RunYcmdTests( args, build_dir ):
 
 def RunYcmdBenchmarks( build_dir ):
   benchmarks_dir = p.join( build_dir, 'ycm', 'benchmarks' )
+  os.chdir( benchmarks_dir )
   new_env = os.environ.copy()
 
   if OnWindows():

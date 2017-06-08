@@ -24,6 +24,7 @@
 // and 3.5.3 on OSX and FreeBSD.
 #include <iostream>
 #include "PythonSupport.h"
+#include "Utils.h"
 
 namespace YouCompleteMe {
 
@@ -117,5 +118,57 @@ BENCHMARK_REGISTER_F( PythonSupportFixture,
     ->RangeMultiplier( 1 << 4 )
     ->Ranges( { { 1, 1 << 16 }, { 50, 50 } } )
     ->Complexity();
+
+
+BENCHMARK_DEFINE_F( PythonSupportFixture,
+                    FilterAndSortUnstoredCandidatesWindowsHeader )(
+    benchmark::State& state ) {
+
+  std::string contents = ReadUtf8File(
+      PathToBenchFile( "windows_header_candidates" ) );
+
+  std::istringstream iss( contents);
+  boost::python::list candidates;
+  for ( std::string insertion_text; std::getline( iss, insertion_text ); ) {
+    boost::python::dict candidate;
+    candidate[ "insertion_text" ] = insertion_text;
+    candidates.append( candidate );
+  }
+
+  while ( state.KeepRunning() ) {
+    state.PauseTiming();
+    CandidateRepository::Instance().ClearCandidates();
+    state.ResumeTiming();
+    FilterAndSortCandidates( candidates, "insertion_text", "G" );
+  }
+}
+
+BENCHMARK_REGISTER_F( PythonSupportFixture,
+                      FilterAndSortUnstoredCandidatesWindowsHeader );
+
+BENCHMARK_DEFINE_F( PythonSupportFixture,
+                    FilterAndSortStoredCandidatesWindowsHeader )(
+    benchmark::State& state ) {
+
+  std::string contents = ReadUtf8File(
+      PathToBenchFile( "windows_header_candidates" ) );
+
+  std::istringstream iss( contents);
+  boost::python::list candidates;
+  for ( std::string insertion_text; std::getline( iss, insertion_text ); ) {
+    boost::python::dict candidate;
+    candidate[ "insertion_text" ] = insertion_text;
+    candidates.append( candidate );
+  }
+
+  // Store the candidates in the repository.
+  FilterAndSortCandidates( candidates, "insertion_text", "G" );
+
+  while ( state.KeepRunning() )
+    FilterAndSortCandidates( candidates, "insertion_text", "G" );
+}
+
+BENCHMARK_REGISTER_F( PythonSupportFixture,
+                      FilterAndSortStoredCandidatesWindowsHeader );
 
 } // namespace YouCompleteMe

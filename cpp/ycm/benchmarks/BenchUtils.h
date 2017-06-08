@@ -18,10 +18,13 @@
 #ifndef BENCHUTILS_H_7UY2GEP1
 #define BENCHUTILS_H_7UY2GEP1
 
+#include <boost/filesystem.hpp>
 #include <string>
 #include <vector>
 
 namespace YouCompleteMe {
+
+boost::filesystem::path PathToBenchFile( const std::string &filepath );
 
 // Generate a list of |number| candidates of the form |prefix|[a-z]{5}.
 std::vector< std::string > GenerateCandidatesWithCommonPrefix(

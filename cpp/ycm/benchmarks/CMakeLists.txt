@@ -33,7 +33,8 @@ include_directories( ${ycm_core_SOURCE_DIR}
 file( GLOB_RECURSE SOURCES *.h *.cpp )
 
 # We don't want benchmark sources in this target.
-file( GLOB_RECURSE to_remove benchmark/*.h benchmark/*.cpp CMakeFiles/*.cpp )
+file( GLOB_RECURSE to_remove benchmark/*.h benchmark/*.cpp CMakeFiles/*.cpp
+                             benchdata/*.cpp benchdata/*.h )
 
 if( to_remove )
   list( REMOVE_ITEM SOURCES ${to_remove} )
@@ -58,3 +59,24 @@ target_link_libraries( ${PROJECT_NAME}
                        ${Boost_LIBRARIES}
                        ycm_core
                        ${BENCHMARK_LIBRARIES} )
+
+if ( NOT CMAKE_GENERATOR_IS_XCODE )
+  # The benchmark executable expects a "benchdata" dir in its working directory.
+  # Why?  Because there's NO reliable, cross-platform way of getting the
+  # directory in which the executable is located.
+  add_custom_target( copy_benchdata
+                     COMMAND cmake -E copy_directory
+                     ${CMAKE_CURRENT_SOURCE_DIR}/benchdata
+                     ${CMAKE_CURRENT_BINARY_DIR}/benchdata )
+else()
+  add_custom_target( copy_benchdata
+                     COMMAND cmake -E copy_directory
+                     ${CMAKE_CURRENT_SOURCE_DIR}/benchdata
+                     ${CMAKE_CURRENT_BINARY_DIR}/Debug/benchdata
+                     COMMAND cmake -E copy_directory
+                     ${CMAKE_CURRENT_SOURCE_DIR}/benchdata
+                     ${CMAKE_CURRENT_BINARY_DIR}/Release/benchdata )
+
+endif()
+
+add_dependencies( ${PROJECT_NAME} copy_benchdata )
