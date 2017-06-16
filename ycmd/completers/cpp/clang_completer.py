@@ -37,7 +37,7 @@ from ycmd.completers.completer import Completer
 from ycmd.completers.completer_utils import GetIncludeStatementValue
 from ycmd.completers.cpp.flags import ( Flags, PrepareFlagsForClang,
                                         NoCompilationDatabase )
-from ycmd.completers.cpp.ephemeral_values_set import EphemeralValuesSet
+from ycmd.completers.cpp.thread_parser import ThreadParser
 from ycmd.responses import NoExtraConfDetected, UnknownExtraConf
 
 CLANG_FILETYPES = set( [ 'c', 'cpp', 'objc', 'objcpp' ] )
@@ -59,7 +59,7 @@ class ClangCompleter( Completer ):
     self._completer = ycm_core.ClangCompleter()
     self._flags = Flags()
     self._diagnostic_store = None
-    self._files_being_compiled = EphemeralValuesSet()
+    self._files_being_parsed = defaultdict( ThreadParser )
 
 
   def SupportedFiletypes( self ):
@@ -101,7 +101,8 @@ class ClangCompleter( Completer ):
     files = self.GetUnsavedFilesVector( request_data )
     line = request_data[ 'line_num' ]
     column = request_data[ 'start_column' ]
-    with self._files_being_compiled.GetExclusive( filename ):
+
+    with self._files_being_parsed[ filename ].Parse( request_data[ 'time' ] ):
       results = self._completer.CandidatesForLocationInFile(
           ToCppStringCompatible( filename ),
           line,
@@ -324,7 +325,7 @@ class ClangCompleter( Completer ):
     if not flags:
       raise ValueError( NO_COMPILE_FLAGS_MESSAGE )
 
-    with self._files_being_compiled.GetExclusive( filename ):
+    with self._files_being_parsed[ filename ].Parse( request_data[ 'time' ] ):
       diagnostics = self._completer.UpdateTranslationUnit(
         ToCppStringCompatible( filename ),
         self.GetUnsavedFilesVector( request_data ),

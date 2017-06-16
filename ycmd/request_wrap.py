@@ -24,6 +24,7 @@ from __future__ import absolute_import
 # Not installing aliases from python-future; it's unreliable and slow.
 from builtins import *  # noqa
 
+import time
 from ycmd.utils import ( ByteOffsetToCodepointOffset,
                          CodepointOffsetToByteOffset,
                          ToUnicode,
@@ -40,6 +41,8 @@ class RequestWrap( object ):
     if validate:
       EnsureRequestValid( request )
     self._request = request
+    if 'time' not in self._request:
+      self._request[ 'time' ] = time.time()
     self._computed_key = {
       # Unicode string representation of the current line
       'line_value': self._CurrentLine,
