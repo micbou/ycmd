@@ -15,5 +15,9 @@ export PATH=${HOME}/bin:${PATH}
 # is set via the PYTHON_CONFIGURE_OPTS option.
 export PYTHON_CONFIGURE_OPTS="--enable-shared"
 
+if [ "${YCM_VALGRIND}" == "true" ]; then
+  export PYTHON_CONFIGURE_OPTS="${PYTHON_CONFIGURE_OPTS} --without-pymalloc"
+fi
+
 # Pre-installed Node.js is too old. Install latest Node.js v4 LTS.
 nvm install 4
