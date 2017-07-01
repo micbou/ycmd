@@ -122,19 +122,25 @@ class ServerState( object ):
     """
     filetypes = request_data[ 'filetypes' ]
     if self.FiletypeCompletionUsable( filetypes ):
+      completer = self.GetFiletypeCompleter( filetypes )
       if ForceSemanticCompletion( request_data ):
         # use semantic, and it was forced
-        return ( True, True )
+        return (
+          True,
+          completer.ShouldHintNow( request_data ),
+          True
+        )
       else:
         # was not forced. check the conditions for triggering
         return (
-          self.GetFiletypeCompleter( filetypes ).ShouldUseNow( request_data ),
+          completer.ShouldCompleteNow( request_data ),
+          completer.ShouldHintNow( request_data ),
           False
         )
 
     # don't use semantic, ignore whether or not the user requested forced
     # completion
-    return ( False, False )
+    return ( False, False, False )
 
 
   def GetGeneralCompleter( self ):

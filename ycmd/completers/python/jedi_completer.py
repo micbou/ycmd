@@ -25,7 +25,7 @@ from __future__ import absolute_import
 # Not installing aliases from python-future; it's unreliable and slow.
 from builtins import *  # noqa
 
-from ycmd.utils import ToBytes, ToUnicode, ProcessIsRunning, urljoin
+from ycmd.utils import SplitLines, ToBytes, ToUnicode, ProcessIsRunning, urljoin
 from ycmd.completers.completer import Completer
 from ycmd import responses, utils, hmac_utils
 from tempfile import NamedTemporaryFile
@@ -261,6 +261,27 @@ class JediCompleter( Completer ):
         return None
 
 
+  def ShouldHintNow( self, request_data ):
+    line_num = request_data[ 'line_num' ]
+    column_codepoint = request_data[ 'column_codepoint' ]
+    current_file = request_data[ 'filepath' ]
+    contents = request_data[ 'file_data' ][ current_file ][ 'contents' ]
+    lines = SplitLines( contents )[ : line_num ]
+    between_parenthesis = True
+    for char in reversed( lines[ -1 ][ : column_codepoint - 1 ] ):
+      if char == ')':
+        return False
+      if char == '(':
+        return True
+    for line in lines[ : -2 ]:
+      for char in reversed( line ):
+        if char == ')':
+          return False
+        if char == '(':
+          return True
+    return False
+
+
   def ComputeCandidatesInner( self, request_data ):
     return [ responses.BuildCompletionData(
                 completion[ 'name' ],
@@ -268,6 +289,22 @@ class JediCompleter( Completer ):
                 completion[ 'docstring' ],
                 extra_data = self._GetExtraData( completion ) )
              for completion in self._JediCompletions( request_data ) ]
+
+
+  def GetHints( self, request_data ):
+    print( self._JediHints( request_data ) )
+    return [ responses.BuildHintData(
+               line = hint[ 'bracket_start' ][ 0 ],
+               column = hint[ 'bracket_start' ][ 1 ],
+               params = [ responses.BuildParamData( param[ 'name' ] )
+                          for param in hint[ 'params' ] ],
+               current = hint[ 'index' ] )
+             for hint in self._JediHints( request_data ) ]
+
+
+  def _JediHints( self, request_data ):
+    return self._GetResponse( '/call_signatures',
+                              request_data )[ 'call_signatures' ]
 
 
   def _JediCompletions( self, request_data ):

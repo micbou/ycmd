@@ -123,12 +123,32 @@ def BuildCompletionData( insertion_text,
   return completion_data
 
 
+def BuildParamData( name ):
+  return {
+    'name': name
+  }
+
+
+def BuildHintData( line,
+                   column,
+                   params,
+                   current ):
+  return {
+    'line': line,
+    'column': column,
+    'params': params,
+    'current': current
+  }
+
+
 # start_column is a byte offset
 def BuildCompletionResponse( completion_datas,
+                             hint_datas,
                              start_column,
                              errors=None ):
   return {
     'completions': completion_datas,
+    'hints': hint_datas,
     'completion_start_column': start_column,
     'errors': errors if errors else [],
   }

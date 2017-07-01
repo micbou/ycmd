@@ -89,18 +89,19 @@ def RunCompleterCommand():
 def GetCompletions():
   _logger.info( 'Received completion request' )
   request_data = RequestWrap( request.json )
-  ( do_filetype_completion, forced_filetype_completion ) = (
+  ( do_filetype_completion, do_filetype_hint, forced_filetype_completion ) = (
                     _server_state.ShouldUseFiletypeCompleter( request_data ) )
   _logger.debug( 'Using filetype completion: %s', do_filetype_completion )
 
   errors = None
   completions = None
+  hints = None
+
+  completer = _server_state.GetFiletypeCompleter( request_data[ 'filetypes' ] )
 
   if do_filetype_completion:
     try:
-      completions = ( _server_state.GetFiletypeCompleter(
-                                  request_data[ 'filetypes' ] )
-                                 .ComputeCandidates( request_data ) )
+      completions = completer.ComputeCandidates( request_data )
 
     except Exception as exception:
       if forced_filetype_completion:
@@ -115,12 +116,20 @@ def GetCompletions():
                         "".join( stack ) )
         errors = [ BuildExceptionResponse( exception, stack ) ]
 
+  if do_filetype_hint:
+    hints = completer.GetHints( request_data )
+
+  completer = _server_state.GetGeneralCompleter()
+
   if not completions and not forced_filetype_completion:
-    completions = ( _server_state.GetGeneralCompleter()
-                                 .ComputeCandidates( request_data ) )
+    completions = completer.ComputeCandidates( request_data )
+
+  if not hints:
+    hints = completer.GetHints( request_data )
 
   return _JsonResponse(
       BuildCompletionResponse( completions if completions else [],
+                               hints if hints else [],
                                request_data[ 'start_column' ],
                                errors = errors ) )
 

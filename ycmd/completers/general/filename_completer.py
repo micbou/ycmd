@@ -86,7 +86,7 @@ class FilenameCompleter( Completer ):
              AtIncludeStatementStart( current_line[ : start_codepoint ] ) )
 
 
-  def ShouldUseNowInner( self, request_data ):
+  def ShouldCompleteNowInner( self, request_data ):
     current_line = request_data[ 'line_value' ]
     start_codepoint = request_data[ 'start_codepoint' ]
 

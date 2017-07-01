@@ -85,24 +85,25 @@ class Completer( with_metaclass( abc.ABCMeta, object ) ):
 
   *END: Important note about unicode and byte offsets*
 
-  ShouldUseNow() is called with the start column of where a potential completion
-  string should start and the current line (string) the cursor is on. For
-  instance, if the user's input is 'foo.bar' and the cursor is on the 'r' in
+  ShouldCompleteNow() is called with the start column of where a potential
+  completion string should start and the current line (string) the cursor is on.
+  For instance, if the user's input is 'foo.bar' and the cursor is on the 'r' in
   'bar', start_column will be the 1-based byte index of 'b' in the line. Your
-  implementation of ShouldUseNow() should return True if your semantic completer
-  should be used and False otherwise.
+  implementation of ShouldCompleteNow() should return True if your semantic
+  completer should be used and False otherwise.
 
   This is important to get right. You want to return False if you can't provide
   completions because then the identifier completer will kick in, and that's
   better than nothing.
 
-  Note that it's HIGHLY likely that you want to override the ShouldUseNowInner()
-  function instead of ShouldUseNow() directly (although chances are that you
-  probably won't have any need to override either). ShouldUseNow() will call
-  your *Inner version of the function and will also make sure that the
-  completion cache is taken into account. You'll see this pattern repeated
-  throughout the Completer API; YCM calls the "main" version of the function and
-  that function calls the *Inner version while taking into account the cache.
+  Note that it's HIGHLY likely that you want to override the
+  ShouldCompleteNowInner() function instead of ShouldCompleteNow() directly
+  (although chances are that you probably won't have any need to override
+  either). ShouldCompleteNow() will call your *Inner version of the function and
+  will also make sure that the completion cache is taken into account. You'll
+  see this pattern repeated throughout the Completer API; YCM calls the "main"
+  version of the function and that function calls the *Inner version while
+  taking into account the cache.
 
   The cache is important and is a nice performance boost. When the user types in
   "foo.", your completer will return a list of all member functions and
@@ -166,8 +167,8 @@ class Completer( with_metaclass( abc.ABCMeta, object ) ):
 
   # It's highly likely you DON'T want to override this function but the *Inner
   # version of it.
-  def ShouldUseNow( self, request_data ):
-    if not self.ShouldUseNowInner( request_data ):
+  def ShouldCompleteNow( self, request_data ):
+    if not self.ShouldCompleteNowInner( request_data ):
       self._completions_cache.Invalidate()
       return False
 
@@ -187,7 +188,7 @@ class Completer( with_metaclass( abc.ABCMeta, object ) ):
       return previous_results_were_valid
 
 
-  def ShouldUseNowInner( self, request_data ):
+  def ShouldCompleteNowInner( self, request_data ):
     if not self.prepared_triggers:
       return False
     current_line = request_data[ 'line_value' ]
@@ -197,6 +198,10 @@ class Completer( with_metaclass( abc.ABCMeta, object ) ):
 
     return self.prepared_triggers.MatchesForFiletype(
         current_line, start_codepoint, column_codepoint, filetype )
+
+
+  def ShouldHintNow( self, request_data ):
+    return False
 
 
   def QueryLengthAboveMinThreshold( self, request_data ):
@@ -211,7 +216,7 @@ class Completer( with_metaclass( abc.ABCMeta, object ) ):
   # version of it.
   def ComputeCandidates( self, request_data ):
     if ( not ForceSemanticCompletion( request_data ) and
-         not self.ShouldUseNow( request_data ) ):
+         not self.ShouldCompleteNow( request_data ) ):
       return []
 
     candidates = self._GetCandidatesFromSubclass( request_data )
@@ -219,6 +224,10 @@ class Completer( with_metaclass( abc.ABCMeta, object ) ):
       candidates = self.FilterAndSortCandidates( candidates,
                                                  request_data[ 'query' ] )
     return candidates
+
+
+  def GetHints( self, request_data ):
+    return []
 
 
   def _GetCandidatesFromSubclass( self, request_data ):

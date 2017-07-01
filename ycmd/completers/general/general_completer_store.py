@@ -60,17 +60,17 @@ class GeneralCompleterStore( Completer ):
     return self._identifier_completer
 
 
-  def ShouldUseNow( self, request_data ):
+  def ShouldCompleteNow( self, request_data ):
     self._current_query_completers = []
 
-    if self._filename_completer.ShouldUseNow( request_data ):
+    if self._filename_completer.ShouldCompleteNow( request_data ):
       self._current_query_completers = [ self._filename_completer ]
       return True
 
     should_use_now = False
 
     for completer in self._non_filename_completers:
-      should_use_this_completer = completer.ShouldUseNow( request_data )
+      should_use_this_completer = completer.ShouldCompleteNow( request_data )
       should_use_now = should_use_now or should_use_this_completer
 
       if should_use_this_completer:
@@ -80,7 +80,7 @@ class GeneralCompleterStore( Completer ):
 
 
   def ComputeCandidates( self, request_data ):
-    if not self.ShouldUseNow( request_data ):
+    if not self.ShouldCompleteNow( request_data ):
       return []
 
     candidates = []
