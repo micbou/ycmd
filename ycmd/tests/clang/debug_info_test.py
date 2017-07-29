@@ -24,7 +24,7 @@ from builtins import *  # noqa
 
 import os
 from hamcrest import ( assert_that, contains, empty, has_entries, has_entry,
-                       instance_of, matches_regexp )
+                       matches_regexp )
 
 from ycmd.tests.clang import ( IsolatedYcmd, PathToTestFile, SharedYcmd,
                                TemporaryClangTestDir, TemporaryClangProject )
@@ -145,7 +145,7 @@ def DebugInfo_FlagsWhenNoExtraConfAndCompilationDatabaseLoaded_test( app ):
           'items': contains(
             has_entries( {
               'key': 'compilation database path',
-              'value': instance_of( str )
+              'value': tmp_dir
             } ),
             has_entries( {
               'key': 'flags',
@@ -174,7 +174,7 @@ def DebugInfo_FlagsWhenNoExtraConfAndInvalidCompilationDatabase_test( app ):
           'items': contains(
             has_entries( {
               'key': 'compilation database path',
-              'value': 'None'
+              'value': tmp_dir
             } ),
             has_entries( {
               'key': 'flags',

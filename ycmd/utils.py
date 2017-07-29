@@ -26,6 +26,7 @@ from builtins import *  # noqa
 
 from future.utils import PY2, native
 import os
+import shlex
 import socket
 import subprocess
 import sys
@@ -465,3 +466,11 @@ def GetCurrentDirectory():
   # OSError.
   except OSError:
     return tempfile.gettempdir()
+
+
+# shlex.split does not support Unicode input on Python 2.6.
+if sys.version_info[ : 2 ] == ( 2, 6 ):
+  def SplitCommand( command ):
+    return [ ToUnicode( arg ) for arg in shlex.split( ToBytes( command ) ) ]
+else:
+  SplitCommand = shlex.split

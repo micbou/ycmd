@@ -1,0 +1,149 @@
+# Copyright (C) 2017 ycmd contributors
+#
+# This file is part of ycmd.
+#
+# ycmd is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# ycmd is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with ycmd.  If not, see <http://www.gnu.org/licenses/>.
+
+# NOTE: This module is used as a Singleton
+
+from __future__ import unicode_literals
+from __future__ import print_function
+from __future__ import division
+from __future__ import absolute_import
+# Not installing aliases from python-future; it's unreliable and slow.
+from builtins import *  # noqa
+
+import json
+import os
+import logging
+from ycmd.responses import InvalidCompilationDatabase
+from ycmd.utils import PathsToAllParentFolders, ReadFile, SplitCommand
+
+
+_logger = logging.getLogger( __name__ )
+
+# List of file extensions to be considered "header" files and thus not present
+# in the compilation database. The logic will try and find an associated
+# "source" file (see SOURCE_EXTENSIONS below) and use the flags for that.
+HEADER_EXTENSIONS = [ '.h', '.hxx', '.hpp', '.hh' ]
+
+# List of file extensions which are considered "source" files for the purposes
+# of heuristically locating the flags for a header file.
+SOURCE_EXTENSIONS = [ '.cpp', '.cxx', '.cc', '.c', '.m', '.mm' ]
+
+# Singleton variables
+# We cache the compilation database for any given source directory
+# Keys are directory names and values are ycm_core.CompilationDatabase
+# instances or None. Value is None when it is known there is no compilation
+# database to be found for the directory.
+_compilation_database_for_folder = {}
+
+
+class NoCompilationDatabase( Exception ):
+  pass
+
+
+def Clear():
+  _compilation_database_for_folder.clear()
+
+
+# Return a compilation database object for the supplied path. Raises
+# NoCompilationDatabase if no compilation database can be found.
+def CompilationDatabaseForFile( filepath ):
+  # We search up the directory hierarchy, to first see if we have a
+  # compilation database already for that path, or if a compile_commands.json
+  # file exists in that directory.
+  for folder in PathsToAllParentFolders( filepath ):
+    # Try/catch to synchronise access to cache.
+    try:
+      database = _compilation_database_for_folder[ folder ]
+      if database:
+        return database
+
+      raise NoCompilationDatabase
+    except KeyError:
+      pass
+
+    compile_commands = os.path.join( folder, 'compile_commands.json' )
+    if not os.path.exists( compile_commands ):
+      continue
+
+    try:
+      compilation_infos = _GetCompilationInfos( compile_commands )
+    except Exception:
+      _logger.exception( 'Cannot load compilation infos from '
+                         'database {0}.'.format( compile_commands ) )
+      raise InvalidCompilationDatabase( compile_commands )
+
+    database = {
+      'directory': folder,
+      'compilation_infos': compilation_infos
+    }
+    _compilation_database_for_folder[ folder ] = database
+    return database
+
+  # Nothing was found. No compilation flags are available.
+  # NOTE: we cache the fact that none was found for this folder to speed up
+  # subsequent searches.
+  _compilation_database_for_folder[ os.path.dirname( filepath ) ] = None
+  raise NoCompilationDatabase
+
+
+def _GetCompilationInfos( compile_commands ):
+  # See https://clang.llvm.org/docs/JSONCompilationDatabase.html for the
+  # compilation database specs.
+  raw_database = json.loads( ReadFile( compile_commands ) )
+  compilation_infos = {}
+  for compilation_info in raw_database:
+    directory = os.path.normpath( compilation_info[ 'directory' ] )
+    filename = compilation_info[ 'file' ]
+    if not os.path.isabs( filename ):
+      filename = os.path.join( directory, filename )
+    filename = os.path.normpath( filename )
+    flags = ( compilation_info[ 'arguments' ] if 'arguments' in compilation_info
+              else SplitCommand( compilation_info[ 'command' ] ) )
+    compilation_infos[ filename ] = {
+      'directory': directory,
+      'flags': flags
+    }
+  return compilation_infos
+
+
+# Find the compilation info structure from the supplied database for the
+# supplied file. If the source file is a header, try and find an appropriate
+# source file and return the compilation_info for that.
+def CompilationInfoForFile( filepath ):
+  database = CompilationDatabaseForFile( filepath )
+  compilation_infos = database[ 'compilation_infos' ]
+
+  # Ask the database for the flags.
+  compilation_info = compilation_infos.get( filepath )
+  if compilation_info:
+    return compilation_info
+
+  # The compilation_commands.json file generated by CMake does not have entries
+  # for header files. So we do our best by asking the db for flags for a
+  # corresponding source file, if any. If one exists, the flags for that file
+  # should be good enough.
+  file_name, file_extension = os.path.splitext( filepath )
+  if file_extension in HEADER_EXTENSIONS:
+    for extension in SOURCE_EXTENSIONS:
+      replacement_file = file_name + extension
+      compilation_info = compilation_infos.get( replacement_file )
+      if compilation_info:
+        return compilation_info
+
+  # No corresponding source file was found, so we can't generate any flags for
+  # this source file.
+  return None

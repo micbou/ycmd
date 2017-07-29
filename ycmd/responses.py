@@ -39,6 +39,8 @@ NO_EXTRA_CONF_FILENAME_MESSAGE = ( 'No {0} file detected, so no compile flags '
 NO_DIAGNOSTIC_SUPPORT_MESSAGE = ( 'YCM has no diagnostics support for this '
   'filetype; refer to Syntastic docs if using Syntastic.')
 
+INVALID_COMP_DATABASE_MESSAGE = '{0} is not a valid compilation database.'
+
 
 class ServerError( Exception ):
   def __init__( self, message ):
@@ -61,6 +63,13 @@ class NoExtraConfDetected( ServerError ):
 class NoDiagnosticSupport( ServerError ):
   def __init__( self ):
     super( NoDiagnosticSupport, self ).__init__( NO_DIAGNOSTIC_SUPPORT_MESSAGE )
+
+
+class InvalidCompilationDatabase( ServerError ):
+  def __init__( self, compile_commands_file ):
+    message = INVALID_COMP_DATABASE_MESSAGE.format( compile_commands_file )
+    super( InvalidCompilationDatabase, self ).__init__( message )
+    self.compile_commands_file = compile_commands_file
 
 
 # column_num is a byte offset
