@@ -38,7 +38,7 @@ from ycmd.completers.completer_utils import GetIncludeStatementValue
 from ycmd.completers.cpp.flags import ( Flags, PrepareFlagsForClang,
                                         NoCompilationDatabase )
 from ycmd.completers.cpp.ephemeral_values_set import EphemeralValuesSet
-from ycmd.responses import NoExtraConfDetected, UnknownExtraConf
+from ycmd.responses import InvalidCompilationDatabase, ServerError
 
 CLANG_FILETYPES = set( [ 'c', 'cpp', 'objc', 'objcpp' ] )
 PARSING_FILE_MESSAGE = 'Still parsing file, no completions yet.'
@@ -371,20 +371,19 @@ class ClangCompleter( Completer ):
 
   def DebugInfo( self, request_data ):
     try:
-      # Note that it only raises NoExtraConfDetected:
-      #  - when extra_conf is None and,
-      #  - there is no compilation database
       flags = self._FlagsForRequest( request_data ) or []
-    except ( NoExtraConfDetected, UnknownExtraConf ):
+    except ServerError:
       # If _FlagsForRequest returns None or raises, we use an empty list in
       # practice.
       flags = []
 
     try:
       database_directory = self._flags.FindCompilationDatabase(
-          os.path.dirname( request_data[ 'filepath' ] ) ).database_directory
+          os.path.dirname( request_data[ 'filepath' ] ) )[ 'directory' ]
     except NoCompilationDatabase:
       database_directory = None
+    except InvalidCompilationDatabase as error:
+      database_directory = os.path.dirname( error.compile_commands_file )
 
     database_item = responses.DebugInfoItem(
       key = 'compilation database path',

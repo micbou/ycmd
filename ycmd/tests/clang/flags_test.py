@@ -23,12 +23,13 @@ from __future__ import absolute_import
 from builtins import *  # noqa
 
 import os
+import time
 
 from nose.tools import eq_, ok_
 from ycmd.completers.cpp import flags
 from mock import patch, Mock
 from ycmd.tests.test_utils import MacOnly
-from ycmd.responses import NoExtraConfDetected
+from ycmd.responses import InvalidCompilationDatabase, NoExtraConfDetected
 from ycmd.tests.clang import TemporaryClangProject, TemporaryClangTestDir
 
 from hamcrest import assert_that, calling, contains, has_item, not_, raises
@@ -375,14 +376,6 @@ def Mac_PathsForAllMacToolchains_test():
          '/Library/Developer/CommandLineTools/test' ] )
 
 
-def CompilationDatabase_NoDatabase_test():
-  with TemporaryClangTestDir() as tmp_dir:
-    assert_that(
-      calling( flags.Flags().FlagsForFile ).with_args(
-        os.path.join( tmp_dir, 'test.cc' ) ),
-      raises( NoExtraConfDetected ) )
-
-
 @MacOnly
 @patch( 'ycmd.completers.cpp.flags._MacIncludePaths',
         return_value = [ 'sentinel_value_for_testing' ] )
@@ -417,6 +410,14 @@ def PrepareFlagsForClang_Sysroot_test( *args ):
     not_( has_item( 'sentinel_value_for_testing' ) ) )
 
 
+def CompilationDatabase_NoDatabase_test():
+  with TemporaryClangTestDir() as tmp_dir:
+    assert_that(
+      calling( flags.Flags().FlagsForFile ).with_args(
+        os.path.join( tmp_dir, 'test.cc' ) ),
+      raises( NoExtraConfDetected ) )
+
+
 def CompilationDatabase_FileNotInDatabase_test():
   compile_commands = [ ]
   with TemporaryClangTestDir() as tmp_dir:
@@ -432,7 +433,67 @@ def CompilationDatabase_InvalidDatabase_test():
       assert_that(
         calling( flags.Flags().FlagsForFile ).with_args(
           os.path.join( tmp_dir, 'test.cc' ) ),
-        raises( NoExtraConfDetected ) )
+        raises( InvalidCompilationDatabase ) )
+
+
+def CompilationDatabase_FileAbsoluteOrRelativeToDirectory_test():
+  with TemporaryClangTestDir() as tmp_dir:
+    compile_commands = [
+      {
+        'directory': tmp_dir,
+        'command': 'clang -Wall',
+        'file': 'relative_path',
+      },
+      {
+        'directory': tmp_dir,
+        'command': 'clang -Werror',
+        'file': os.path.join( tmp_dir, 'absolute_path' ),
+      },
+    ]
+    with TemporaryClangProject( tmp_dir, compile_commands ):
+      assert_that(
+        flags.Flags().FlagsForFile(
+          os.path.join( tmp_dir, 'relative_path' ),
+          add_extra_clang_flags = False ),
+        contains( 'clang', '-Wall' ) )
+      assert_that(
+        flags.Flags().FlagsForFile(
+          os.path.join( tmp_dir, 'absolute_path' ),
+          add_extra_clang_flags = False ),
+        contains( 'clang', '-Werror' ) )
+
+
+def CompilationDatabase_SupportArgumentsField_test():
+  with TemporaryClangTestDir() as tmp_dir:
+    compile_commands = [
+      {
+        'directory': tmp_dir,
+        'arguments': [ 'clang', '-Wall', '-Werror' ],
+        'file': os.path.join( tmp_dir, 'test.c' ),
+      }
+    ]
+    with TemporaryClangProject( tmp_dir, compile_commands ):
+      assert_that(
+        flags.Flags().FlagsForFile(
+          os.path.join( tmp_dir, 'test.c' ),
+          add_extra_clang_flags = False ),
+        contains( 'clang', '-Wall', '-Werror' ) )
+
+
+
+def CompilationDatabase_CommandOrArgumentsFieldIsRequired_test():
+  with TemporaryClangTestDir() as tmp_dir:
+    compile_commands = [
+      {
+        'directory': tmp_dir,
+        'file': os.path.join( tmp_dir, 'test.c' ),
+      }
+    ]
+    with TemporaryClangProject( tmp_dir, compile_commands ):
+      assert_that(
+        calling( flags.Flags().FlagsForFile ).with_args(
+          os.path.join( tmp_dir, 'test.c' ) ),
+        raises( InvalidCompilationDatabase ) )
 
 
 def CompilationDatabase_UseFlagsFromDatabase_test():
@@ -548,6 +609,58 @@ def CompilationDatabase_HeaderFileHeuristicNotFound_test():
           os.path.join( tmp_dir, 'not_in_the_db.h' ),
           add_extra_clang_flags = False ),
         [] )
+
+
+def CompilationDatabase_ReloadIfOutdated_test():
+  f = flags.Flags()
+
+  with TemporaryClangTestDir() as tmp_dir:
+    compile_commands = [
+      {
+        'directory': tmp_dir,
+        'command': 'clang -Wall',
+        'file': os.path.join( tmp_dir, 'test.c' ),
+      },
+    ]
+
+    with TemporaryClangProject( tmp_dir, compile_commands ):
+      assert_that(
+        f.FlagsForFile(
+          os.path.join( tmp_dir, 'test.c' ),
+          add_extra_clang_flags = False ),
+        contains( 'clang', '-Wall' ) )
+
+    # Update the database after a small time with new flags and an additional
+    # entry.
+    time.sleep( 1 )
+    compile_commands = [
+      {
+        'directory': tmp_dir,
+        'command': 'clang -Wall -Werror',
+        'file': os.path.join( tmp_dir, 'test.c' ),
+      },
+      {
+        'directory': tmp_dir,
+        'command': 'clang -Wall -Werror',
+        'file': os.path.join( tmp_dir, 'another_test.c' ),
+      },
+    ]
+
+    with TemporaryClangProject( tmp_dir, compile_commands ):
+      # FIXME: flags already loaded for a file won't be reloaded unless the user
+      # specifically clear them with the ClearCompilationFlagCache command. This
+      # should be automatic when the compilation database changes.
+      assert_that(
+        f.FlagsForFile(
+          os.path.join( tmp_dir, 'test.c' ),
+          add_extra_clang_flags = False ),
+        contains( 'clang', '-Wall' ) )
+
+      assert_that(
+        f.FlagsForFile(
+          os.path.join( tmp_dir, 'another_test.c' ),
+          add_extra_clang_flags = False ),
+        contains( 'clang', '-Wall', '-Werror' ) )
 
 
 def _MakeRelativePathsInFlagsAbsoluteTest( test ):

@@ -25,12 +25,16 @@ from builtins import *  # noqa
 import ycm_core
 import os
 import inspect
+import json
+import logging
 import re
+from collections import defaultdict
 from future.utils import PY2, native
 from ycmd import extra_conf_store
-from ycmd.utils import ( ToCppStringCompatible, OnMac, OnWindows, ToUnicode,
-                         ToBytes, PathsToAllParentFolders )
-from ycmd.responses import NoExtraConfDetected
+from ycmd.utils import ( ToCppStringCompatible, OnMac, OnWindows, ReadFile,
+                         SplitCommand, ToUnicode, ToBytes,
+                         PathsToAllParentFolders )
+from ycmd.responses import InvalidCompilationDatabase, NoExtraConfDetected
 
 
 # -include-pch and --sysroot= must be listed before -include and --sysroot
@@ -90,7 +94,8 @@ class Flags( object ):
     # It's caches all the way down...
     self.flags_for_file = {}
     self.extra_clang_flags = _ExtraClangFlags()
-    self.no_extra_conf_file_warning_posted = False
+    self.no_extra_conf_file_warning_posted = defaultdict( bool )
+    self._logger = logging.getLogger( __name__ )
 
     # We cache the compilation database for any given source directory
     # Keys are directory names and values are ycm_core.CompilationDatabase
@@ -121,17 +126,7 @@ class Flags( object ):
     except KeyError:
       pass
 
-    module = extra_conf_store.ModuleForSourceFile( filename )
-    try:
-      results = self._GetFlagsFromExtraConfOrDatabase( module,
-                                                       filename,
-                                                       client_data )
-    except NoCompilationDatabase:
-      if not self.no_extra_conf_file_warning_posted:
-        self.no_extra_conf_file_warning_posted = True
-        raise NoExtraConfDetected
-      return []
-
+    results = self._GetFlagsFromExtraConfOrDatabase( filename, client_data )
     if not results or not results.get( 'flags_ready', True ):
       return []
 
@@ -151,11 +146,19 @@ class Flags( object ):
     return sanitized_flags
 
 
-  def _GetFlagsFromExtraConfOrDatabase( self, module, filename, client_data ):
-    if not module:
-      return self._GetFlagsFromCompilationDatabase( filename )
+  def _GetFlagsFromExtraConfOrDatabase( self, filename, client_data ):
+    module = extra_conf_store.ModuleForSourceFile( filename )
+    if module:
+      return _CallExtraConfFlagsForFile( module, filename, client_data )
 
-    return _CallExtraConfFlagsForFile( module, filename, client_data )
+    try:
+      return self._GetFlagsFromCompilationDatabase( filename )
+    except NoCompilationDatabase:
+      if not self.no_extra_conf_file_warning_posted[ filename ]:
+        self.no_extra_conf_file_warning_posted[ filename ] = True
+        raise NoExtraConfDetected
+
+    return None
 
 
   def UserIncludePaths( self, filename, client_data ):
@@ -233,8 +236,8 @@ class Flags( object ):
 
     return {
       'flags': _MakeRelativePathsInFlagsAbsolute(
-        compilation_info.compiler_flags_,
-        compilation_info.compiler_working_dir_ ),
+        compilation_info[ 'flags' ],
+        compilation_info[ 'directory' ] ),
     }
 
 
@@ -245,29 +248,63 @@ class Flags( object ):
     # compilation database already for that path, or if a compile_commands.json
     # file exists in that directory.
     for folder in PathsToAllParentFolders( file_dir ):
-      # Try/catch to syncronise access to cache
+      # Try/catch to synchronise access to cache.
       try:
         database = self.compilation_database_dir_map[ folder ]
-        if database:
-          return database
-
-        raise NoCompilationDatabase
+        if not database:
+          raise NoCompilationDatabase
       except KeyError:
-        pass
+        database = None
 
       compile_commands = os.path.join( folder, 'compile_commands.json' )
-      if os.path.exists( compile_commands ):
-        database = ycm_core.CompilationDatabase( folder )
+      if not os.path.exists( compile_commands ):
+        continue
 
-        if database.DatabaseSuccessfullyLoaded():
-          self.compilation_database_dir_map[ folder ] = database
-          return database
+      # Check if the compilation database is up to date.
+      current_mtime = os.path.getmtime( compile_commands )
+      if database and current_mtime <= database[ 'modification_time' ]:
+        return database
+
+      try:
+        compilation_infos = _GetCompilationInfosFromDatabase( compile_commands )
+      except Exception:
+        self._logger.exception( 'Cannot load compilation infos from '
+                                'database {0}.'.format( compile_commands ) )
+        raise InvalidCompilationDatabase( compile_commands )
+
+      database = {
+        'directory': folder,
+        'compilation_infos': compilation_infos,
+        'modification_time': current_mtime
+      }
+      self.compilation_database_dir_map[ folder ] = database
+      return database
 
     # Nothing was found. No compilation flags are available.
-    # Note: we cache the fact that none was found for this folder to speed up
+    # NOTE: we cache the fact that none was found for this folder to speed up
     # subsequent searches.
     self.compilation_database_dir_map[ file_dir ] = None
     raise NoCompilationDatabase
+
+
+def _GetCompilationInfosFromDatabase( compile_commands ):
+  # See https://clang.llvm.org/docs/JSONCompilationDatabase.html for the
+  # compilation database specs.
+  raw_database = json.loads( ReadFile( compile_commands ) )
+  compilation_infos = {}
+  for compilation_info in raw_database:
+    directory = os.path.normpath( compilation_info[ 'directory' ] )
+    filename = compilation_info[ 'file' ]
+    if not os.path.isabs( filename ):
+      filename = os.path.join( directory, filename )
+    filename = os.path.normpath( filename )
+    flags = ( compilation_info[ 'arguments' ] if 'arguments' in compilation_info
+              else SplitCommand( compilation_info[ 'command' ] ) )
+    compilation_infos[ filename ] = {
+      'directory': directory,
+      'flags': flags
+    }
+  return compilation_infos
 
 
 def _ExtractFlagsList( flags_for_file_output ):
@@ -592,6 +629,8 @@ def _MakeRelativePathsInFlagsAbsolute( flags, working_directory ):
 # supplied file. If the source file is a header, try and find an appropriate
 # source file and return the compilation_info for that.
 def _GetCompilationInfoForFile( database, file_name, file_extension ):
+  compilation_infos = database[ 'compilation_infos' ]
+
   # The compilation_commands.json file generated by CMake does not have entries
   # for header files. So we do our best by asking the db for flags for a
   # corresponding source file, if any. If one exists, the flags for that file
@@ -599,9 +638,8 @@ def _GetCompilationInfoForFile( database, file_name, file_extension ):
   if file_extension in HEADER_EXTENSIONS:
     for extension in SOURCE_EXTENSIONS:
       replacement_file = os.path.splitext( file_name )[ 0 ] + extension
-      compilation_info = database.GetCompilationInfoForFile(
-        replacement_file )
-      if compilation_info and compilation_info.compiler_flags_:
+      compilation_info = compilation_infos.get( replacement_file )
+      if compilation_info:
         return compilation_info
 
     # No corresponding source file was found, so we can't generate any flags for
@@ -609,8 +647,4 @@ def _GetCompilationInfoForFile( database, file_name, file_extension ):
     return None
 
   # It's a source file. Just ask the database for the flags.
-  compilation_info = database.GetCompilationInfoForFile( file_name )
-  if compilation_info.compiler_flags_:
-    return compilation_info
-
-  return None
+  return compilation_infos.get( file_name )
