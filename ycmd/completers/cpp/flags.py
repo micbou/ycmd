@@ -27,11 +27,12 @@ import os
 import inspect
 import re
 import subprocess
+import tempfile
 from future.utils import PY2, native
 from ycmd import extra_conf_store
-from ycmd.utils import ( GetExecutable, ToCppStringCompatible, OnMac, OnWindows,
-                         ToUnicode, ToBytes, PathsToAllParentFolders,
-                         SafePopen )
+from ycmd.utils import ( FindExecutable, GetExecutable, ToCppStringCompatible,
+                         OnMac, OnWindows, ToUnicode, ToBytes,
+                         PathsToAllParentFolders, SafePopen )
 from ycmd.responses import NoExtraConfDetected
 
 
@@ -79,15 +80,16 @@ EMPTY_FLAGS = {
 }
 
 PATH_TO_YCMD_DIR = os.path.abspath( os.path.dirname( ycm_core.__file__ ) )
-FAKE_CLANG_EXECUTABLE = GetExecutable( os.path.join( PATH_TO_YCMD_DIR,
-                                                     'ycm_fake_clang' ) )
+CLANG_EXECUTABLE = ( FindExecutable( 'clang' ) or
+                     GetExecutable( os.path.join( PATH_TO_YCMD_DIR,
+                                                  'ycm_fake_clang' ) ) )
 CLANG_RESOURCE_DIR = '-resource-dir=' + os.path.join( PATH_TO_YCMD_DIR,
                                                       'clang_includes' )
 
 # Regular expression to capture the list of system headers from the output of
 # ycm_fake_clang.
 SYSTEM_HEADER_REGEX = re.compile(
-  "#include <\.\.\.> search starts here:\n((?: .*\n)*)End of search list.",
+  "#include <\.\.\.> search starts here:\r?\n((?: .*\r?\n)*)End of search list.",
   re.MULTILINE )
 
 # These additional header paths are required on macOS; specifying -resource-dir
@@ -565,17 +567,23 @@ def _AddSystemHeaderPaths( flags, filename ):
   """Add the system header directories to the list of flags given by the user.
   This is needed to provide completion of these headers in include statements
   as well as jumping to these headers."""
-  if not FAKE_CLANG_EXECUTABLE:
+  if not CLANG_EXECUTABLE:
     return []
+  import logging
+  logging.debug( CLANG_EXECUTABLE )
 
-  # Use the ycm_fake_clang executable to output the list of system header
-  # directories. Only the file extension is needed; libclang will deduce the
-  # language from it when the -x flag is not given.
+  # Use Clang or the ycm_fake_clang executable to output the list of system
+  # header directories. Create a temporary file with the same file
+  # extension as the input one; libclang will deduce the language from the
+  # extension when the -x flag is not given.
   _, extension = os.path.splitext( filename )
-  _, stderr = SafePopen( [ FAKE_CLANG_EXECUTABLE, '-E', '-v' ] +
-                         _GetFakeFlags( flags ) +
-                         [ 'ycm_dummy_file' + extension ],
-                         stderr = subprocess.PIPE ).communicate()
+  with tempfile.NamedTemporaryFile( suffix = extension ) as temp_file:
+    logging.debug( temp_file.name )
+    _, stderr = SafePopen( [ CLANG_EXECUTABLE, '-E', '-v' ] +
+                           _GetFakeFlags( flags ) +
+                           [ temp_file.name ],
+                           stderr = subprocess.PIPE ).communicate()
+  logging.debug( stderr )
 
   match = re.search( SYSTEM_HEADER_REGEX, ToUnicode( stderr ) )
   if not match:
@@ -595,4 +603,5 @@ def _AddSystemHeaderPaths( flags, filename ):
     else:
       system_headers.extend( [ '-isystem', os.path.abspath( include_line ) ] )
 
+  logging.debug( system_headers )
   return flags + system_headers
