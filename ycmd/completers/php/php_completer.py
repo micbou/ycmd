@@ -58,9 +58,11 @@ class PhpCompleter( language_server_completer.LanguageServerCompleter ):
   def __init__( self, user_options ):
     super( PhpCompleter, self ).__init__( user_options )
 
+    self._server_keep_logfiles = user_options[ 'server_keep_logfiles' ]
     # Used to ensure that starting/stopping of the server is synchronized
     self._server_state_mutex = threading.RLock()
     self._server_handle = None
+    self._server_stdout = None
     self._server_stderr = None
     self._server_port = None
 
@@ -159,7 +161,7 @@ class PhpCompleter( language_server_completer.LanguageServerCompleter ):
   def _RestartServer( self, request_data ):
     with self._server_state_mutex:
       self._StopServer()
-      self._StartServer( request_data.get( 'working_dir' ) )
+      self._StartServer()
 
 
   def _StartServer( self ):
@@ -216,8 +218,43 @@ class PhpCompleter( language_server_completer.LanguageServerCompleter ):
 
   def _StopServer( self ):
     with self._server_state_mutex:
-      # TODO:
-      pass
+      # Tell the connection to expect the server to disconnect.
+      if self._connection:
+        self._connection.stop()
+
+      # Tell the server to exit using the shutdown request.
+      if self._ServerIsRunning():
+        _logger.info( 'Stopping PHP Language Server with PID {0}'.format(
+                          self._server_handle.pid ) )
+
+        self.ShutdownServer()
+
+        try:
+          utils.WaitUntilProcessIsTerminated( self._server_handle,
+                                              timeout = 5 )
+
+          if self._connection:
+            self._connection.join()
+
+          _logger.info( 'PHP Language Server stopped' )
+        except Exception:
+          _logger.exception( 'Error while stopping PHP Language Server' )
+
+      self._CleanUp()
+
+
+  def _CleanUp( self ):
+    self._server_handle = None
+    self._server_port = None
+    self._connection = None
+    self.ServerReset()
+    if not self._server_keep_logfiles:
+      if self._server_stdout:
+        utils.RemoveIfExists( self._server_stdout )
+        self._server_stdout = None
+      if self._server_stderr:
+        utils.RemoveIfExists( self._server_stderr )
+        self._server_stderr = None
 
 
   def HandleServerCommand( self, request_data, command ):

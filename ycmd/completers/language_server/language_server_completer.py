@@ -518,6 +518,9 @@ class TCPSingleStreamServer( LanguageServerConnection, threading.Thread ):
     assert self._connection_event.isSet()
     assert self._client_socket
 
+    if self.IsStopped():
+      raise LanguageServerConnectionStopped()
+
     if size < 0:
       data = self._client_socket.recv( 2048 )
       if data == '':
