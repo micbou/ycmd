@@ -42,7 +42,7 @@ from ycmd.user_options_store import DefaultOptions
 from ycmd.utils import ( CloseStandardStreams, CreateLogfile,
                          GetUnusedLocalhostPort, ReadFile, RemoveIfExists,
                          SafePopen, SetEnviron, ToBytes, ToUnicode, urljoin,
-                         urlparse )
+                         urlparse, WaitUntilProcessIsTerminated )
 
 HEADERS = { 'content-type': 'application/json' }
 HMAC_HEADER = 'x-ycm-hmac'
@@ -74,6 +74,7 @@ class Client_test( object ):
     for server in self._servers:
       if server.is_running():
         server.terminate()
+    WaitUntilProcessIsTerminated( self._popen_handle, timeout = 5 )
     CloseStandardStreams( self._popen_handle )
     for logfile in self._logfiles:
       RemoveIfExists( logfile )
