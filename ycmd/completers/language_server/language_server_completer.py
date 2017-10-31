@@ -468,19 +468,26 @@ class LanguageServerConnection( threading.Thread ):
     for notifications (unsolicited messages from the server), simply accumulates
     them in a Queue which is polled by the long-polling mechanism in
     LanguageServerCompleter."""
-    if 'id' in message:
-      with self._response_mutex:
-        message_id = str( message[ 'id' ] )
-        assert message_id in self._responses
-        self._responses[ message_id ].ResponseReceived( message )
-        del self._responses[ message_id ]
-    else:
+    if 'method' in message:
+      if 'id' in message:
+        # We received a request. Ignore it.
+        return
+
+      # We received a notification.
       self._AddNotificationToQueue( message )
 
       # If there is an immediate (in-message-pump-thread) handler configured,
       # call it.
       if self._notification_handler:
         self._notification_handler( self, message )
+
+      return
+
+    # We received a response.
+    with self._response_mutex:
+      message_id = str( message[ 'id' ] )
+      self._responses[ message_id ].ResponseReceived( message )
+      del self._responses[ message_id ]
 
 
   def _AddNotificationToQueue( self, message ):
@@ -581,6 +588,7 @@ class LanguageServerCompleter( Completer ):
     - Implement the following Completer abstract methods:
       - SupportedFiletypes
       - DebugInfo
+      - StartServer
       - Shutdown
       - ServerIsHealthy : Return True if the server is _running_
       - GetSubcommandsMap
@@ -672,6 +680,12 @@ class LanguageServerCompleter( Completer ):
       self._on_initialize_complete_handlers = []
       self._server_capabilities = None
       self._resolve_completion_items = False
+      self._settings = {}
+
+
+  @abc.abstractmethod
+  def StartServer( self, request_data, **kwargs ):
+    pass # pragma: no cover
 
 
   def ShutdownServer( self ):
@@ -887,6 +901,8 @@ class LanguageServerCompleter( Completer ):
 
 
   def OnFileReadyToParse( self, request_data ):
+    self.StartServer( request_data )
+
     if not self.ServerIsHealthy():
       return
 
@@ -1214,7 +1230,8 @@ class LanguageServerCompleter( Completer ):
 
       request_id = self.GetConnection().NextRequestId()
       msg = lsp.Initialize( request_id,
-                            self._GetProjectDirectory( request_data ) )
+                            self._GetProjectDirectory( request_data ),
+                            self._settings )
 
       def response_handler( response, message ):
         if message is None:
@@ -1264,10 +1281,9 @@ class LanguageServerCompleter( Completer ):
       # Some language servers require the use of didChangeConfiguration event,
       # even though it is not clear in the specification that it is mandatory,
       # nor when it should be sent.  VSCode sends it immediately after
-      # initialized notification, so we do the same. In future, we might
-      # support getting this config from ycm_extra_conf or the client, but for
-      # now, we send an empty object.
-      self.GetConnection().SendNotification( lsp.DidChangeConfiguration( {} ) )
+      # initialized notification, so we do the same.
+      self.GetConnection().SendNotification(
+        lsp.DidChangeConfiguration( self._settings ) )
 
       # Notify the other threads that we have completed the initialize exchange.
       self._initialize_response = None
@@ -1444,8 +1460,11 @@ class LanguageServerCompleter( Completer ):
       lsp.Rename( request_id, request_data, new_name ),
       REQUEST_TIMEOUT_COMMAND )
 
-    return responses.BuildFixItResponse(
-      [ WorkspaceEditToFixIt( request_data, response[ 'result' ] ) ] )
+    fixit = WorkspaceEditToFixIt( request_data, response[ 'result' ] )
+    if not fixit:
+      raise RuntimeError( 'Cannot rename under cursor.' )
+
+    return responses.BuildFixItResponse( [ fixit ] )
 
 
   def Format( self, request_data ):
@@ -1501,12 +1520,15 @@ def _CompletionItemToCompletionData( insertion_text, item, fixits ):
     kind = lsp.ITEM_KIND[ item.get( 'kind', 0 ) ]
   except IndexError:
     kind = lsp.ITEM_KIND[ 0 ] # Fallback to None for unsupported kinds.
+
+  documentation = item.get( 'documentation', '' )
+  if isinstance( documentation, dict ):
+    documentation = documentation[ 'value' ]
+
   return responses.BuildCompletionData(
     insertion_text,
     extra_menu_info = item.get( 'detail', None ),
-    detailed_info = ( item[ 'label' ] +
-                      '\n\n' +
-                      item.get( 'documentation', '' ) ),
+    detailed_info = item[ 'label' ] + '\n\n' + documentation,
     menu_text = item[ 'label' ],
     kind = kind,
     extra_data = fixits )
