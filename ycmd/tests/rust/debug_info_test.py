@@ -1,4 +1,4 @@
-# Copyright (C) 2016-2017 ycmd contributors
+# Copyright (C) 2016-2018 ycmd contributors
 #
 # This file is part of ycmd.
 #
@@ -22,7 +22,7 @@ from __future__ import absolute_import
 # Not installing aliases from python-future; it's unreliable and slow.
 from builtins import *  # noqa
 
-from hamcrest import ( any_of, assert_that, contains, has_entries, has_entry,
+from hamcrest import ( assert_that, contains, has_entries, has_entry,
                        instance_of, none )
 
 from ycmd.tests.rust import SharedYcmd
@@ -37,18 +37,36 @@ def DebugInfo_test( app ):
     has_entry( 'completer', has_entries( {
       'name': 'Rust',
       'servers': contains( has_entries( {
-        'name': 'Racerd',
+        'name': 'Rust Language Server',
         'is_running': instance_of( bool ),
         'executable': instance_of( str ),
         'pid': instance_of( int ),
-        'address': instance_of( str ),
-        'port': instance_of( int ),
-        'logfiles': contains( instance_of( str ),
-                              instance_of( str ) )
+        'address': none(),
+        'port': none(),
+        'logfiles': contains( instance_of( str ) ),
+        'extras': contains(
+          has_entries( {
+            'key': 'status',
+            'value': instance_of( str )
+          } ), has_entries( {
+            'key': 'version',
+            'value': instance_of( str )
+          } )
+        )
       } ) ),
-      'items': contains( has_entries( {
-        'key': 'Rust sources',
-        'value': any_of( none(), instance_of( str ) )
-      } ) )
+      'items': contains(
+        has_entries( {
+          'key': 'Rustup path',
+          'value': instance_of( str )
+        } ),
+        has_entries( {
+          'key': 'Rustup version',
+          'value': instance_of( str )
+        } ),
+        has_entries( {
+          'key': 'Toolchain',
+          'value': instance_of( str )
+        } )
+      )
     } ) )
   )

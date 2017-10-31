@@ -1,4 +1,4 @@
-# Copyright (C) 2016 ycmd contributors
+# Copyright (C) 2016-2018 ycmd contributors
 #
 # This file is part of ycmd.
 #
@@ -25,11 +25,16 @@ from builtins import *  # noqa
 import functools
 import os
 
-from ycmd.tests.test_utils import ( ClearCompletionsCache, IsolatedApp,
-                                    SetUpApp, StopCompleterServer,
+from ycmd.tests.test_utils import ( BuildRequest,
+                                    ClearCompletionsCache,
+                                    IsolatedApp,
+                                    SetUpApp,
+                                    StopCompleterServer,
                                     WaitUntilCompleterServerReady )
 
 shared_app = None
+# Startup may take a long time if the toolchain is not installed.
+SERVER_STARTUP_TIMEOUT = 240 # seconds
 
 
 def PathToTestFile( *args ):
@@ -45,7 +50,17 @@ def setUpPackage():
   global shared_app
 
   shared_app = SetUpApp()
-  WaitUntilCompleterServerReady( shared_app, 'rust' )
+  StartRustCompleterServerInDirectory( shared_app,
+                                       PathToTestFile( 'common', 'src' ) )
+
+
+def StartRustCompleterServerInDirectory( app, directory ):
+  app.post_json( '/event_notification',
+                 BuildRequest(
+                   filepath = os.path.join( directory, 'main.rs' ),
+                   event_name = 'FileReadyToParse',
+                   filetype = 'rust' ) )
+  WaitUntilCompleterServerReady( shared_app, 'rust', SERVER_STARTUP_TIMEOUT )
 
 
 def tearDownPackage():
@@ -70,31 +85,19 @@ def SharedYcmd( test ):
   return Wrapper
 
 
-def IsolatedYcmd( custom_options = {} ):
+def IsolatedYcmd( test ):
   """Defines a decorator to be attached to tests of this package. This decorator
   passes a unique ycmd application as a parameter. It should be used on tests
   that change the server state in a irreversible way (ex: a semantic subserver
   is stopped or restarted) or expect a clean state (ex: no semantic subserver
-  started, no .ycm_extra_conf.py loaded, etc). Use the optional parameter
-  |custom_options| to give additional options and/or override the default ones.
+  started, no .ycm_extra_conf.py loaded, etc).
 
-  Do NOT attach it to test generators but directly to the yielded tests.
-
-  Example usage:
-
-    from ycmd.tests.rust import IsolatedYcmd
-
-    @IsolatedYcmd( { 'rust_src_path': '/some/path' } )
-    def CustomRustSrcPath_test( app ):
-      ...
-  """
-  def Decorator( test ):
-    @functools.wraps( test )
-    def Wrapper( *args, **kwargs ):
-      with IsolatedApp( custom_options ) as app:
-        try:
-          test( app, *args, **kwargs )
-        finally:
-          StopCompleterServer( app, 'rust' )
-    return Wrapper
-  return Decorator
+  Do NOT attach it to test generators but directly to the yielded tests."""
+  @functools.wraps( test )
+  def Wrapper( *args, **kwargs ):
+    with IsolatedApp() as app:
+      try:
+        test( app, *args, **kwargs )
+      finally:
+        StopCompleterServer( app, 'rust' )
+  return Wrapper

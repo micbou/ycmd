@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2017 ycmd contributors
+# Copyright (C) 2015-2018 ycmd contributors
 #
 # This file is part of ycmd.
 #
@@ -22,434 +22,504 @@ from __future__ import absolute_import
 # Not installing aliases from python-future; it's unreliable and slow.
 from builtins import *  # noqa
 
-from ycmd.utils import ( ExpandVariablesInPath, FindExecutable, ToUnicode,
-                         ToBytes, SetEnviron, ProcessIsRunning, urljoin )
-from ycmd.completers.completer import Completer
-from ycmd import responses, utils, hmac_utils
-
-from future.utils import iteritems, native
 import logging
-import requests
-import json
-import tempfile
-import base64
-import binascii
-import threading
 import os
-import subprocess
+import re
+import threading
+import time
+from subprocess import STDOUT, PIPE
+from ycmd import responses, utils
+from ycmd.completers.language_server import language_server_completer
+from collections import deque
 
-from os import path as p
 
 _logger = logging.getLogger( __name__ )
 
-DIR_OF_THIRD_PARTY = p.abspath(
-  p.join( p.dirname( __file__ ), '..', '..', '..', 'third_party' ) )
-
-RACERD_BINARY_NAME = 'racerd' + ( '.exe' if utils.OnWindows() else '' )
-RACERD_BINARY_RELEASE = p.join( DIR_OF_THIRD_PARTY, 'racerd', 'target',
-                        'release', RACERD_BINARY_NAME )
-RACERD_BINARY_DEBUG = p.join( DIR_OF_THIRD_PARTY, 'racerd', 'target',
-                        'debug', RACERD_BINARY_NAME )
-
-RACERD_HMAC_HEADER = 'x-racerd-hmac'
-HMAC_SECRET_LENGTH = 16
-
-BINARY_NOT_FOUND_MESSAGE = (
-  'racerd binary not found. Did you build it? '
-  'You can do so by running "./build.py --rust-completer".' )
-NON_EXISTING_RUST_SOURCES_PATH_MESSAGE = (
-  'Rust sources path does not exist. Check the value of the rust_src_path '
-  'option or the RUST_SRC_PATH environment variable.' )
-ERROR_FROM_RACERD_MESSAGE = (
-  'Received error from racerd while retrieving completions. You did not '
-  'set the rust_src_path option, which is probably causing this issue. '
-  'See YCM docs for details.' )
-
-LOGFILE_FORMAT = 'racerd_{port}_{std}_'
+LOGFILE_FORMAT = 'rls_'
+TOOLCHAIN_CHANNEL = 'nightly'
+TOOLCHAIN_DATE = '2018-02-15'
+TOOLCHAIN = '{channel}-{date}'.format( channel = TOOLCHAIN_CHANNEL,
+                                       date = TOOLCHAIN_DATE )
+RUSTUP_TOOLCHAIN_REGEX = re.compile( r'^(?P<toolchain>[\w-]+)' )
+RUSTUP_VERSION = re.compile( r'^rustup (?P<version>.*)$' )
+RLS_VERSION = re.compile( r'^rls-preview (?P<version>.*)$' )
 
 
-def _GetRustSysroot( rustc_exec ):
-  return ToUnicode( utils.SafePopen( [ rustc_exec,
-                                        '--print',
-                                        'sysroot' ],
-                                      stdin_windows = subprocess.PIPE,
-                                      stdout = subprocess.PIPE,
-                                      stderr = subprocess.PIPE )
-                              .communicate()[ 0 ].rstrip() )
+def _GetCommandOutput( command ):
+  return utils.ToUnicode(
+    utils.SafePopen( command,
+                     stdin_windows = PIPE,
+                     stdout = PIPE,
+                     stderr = PIPE ).communicate()[ 0 ].rstrip() )
 
 
-def FindRacerdBinary( user_options ):
-  """
-  Find path to racerd binary
-
-  This function prefers the 'racerd_binary_path' value as provided in
-  user_options if available. It then falls back to ycmd's racerd build. If
-  that's not found, attempts to use racerd from current path.
-  """
-  racerd_user_binary = user_options.get( 'racerd_binary_path' )
-  if racerd_user_binary:
-    # The user has explicitly specified a path.
-    if os.path.isfile( racerd_user_binary ):
-      return racerd_user_binary
-    _logger.warning( 'User-provided racerd_binary_path does not exist.' )
-
-  if os.path.isfile( RACERD_BINARY_RELEASE ):
-    return RACERD_BINARY_RELEASE
-
-  # We want to support using the debug binary for the sake of debugging; also,
-  # building the release version on Travis takes too long.
-  if os.path.isfile( RACERD_BINARY_DEBUG ):
-    _logger.warning( 'Using racerd DEBUG binary; performance will suffer!' )
-    return RACERD_BINARY_DEBUG
-
-  return utils.PathToFirstExistingExecutable( [ 'racerd' ] )
-
-
-class RustCompleter( Completer ):
-  """
-  A completer for the rust programming language backed by racerd.
-  https://github.com/jwilm/racerd
-  """
-
+class RustCompleter( language_server_completer.LanguageServerCompleter ):
   def __init__( self, user_options ):
     super( RustCompleter, self ).__init__( user_options )
-    self._racerd_binary = FindRacerdBinary( user_options )
-    self._racerd_port = None
-    self._racerd_host = None
-    self._server_state_lock = threading.RLock()
-    self._keep_logfiles = user_options[ 'server_keep_logfiles' ]
-    self._hmac_secret = ''
-    self._rust_source_path = self._GetRustSrcPath()
 
-    if not self._rust_source_path:
-      _logger.warning( 'No path provided for the rustc source. Please set the '
-                       'rust_src_path option' )
-    elif not p.isdir( self._rust_source_path ):
-      _logger.error( NON_EXISTING_RUST_SOURCES_PATH_MESSAGE )
-      raise RuntimeError( NON_EXISTING_RUST_SOURCES_PATH_MESSAGE )
+    self._server_keep_logfiles = user_options[ 'server_keep_logfiles' ]
 
-    if not self._racerd_binary:
-      _logger.error( BINARY_NOT_FOUND_MESSAGE )
-      raise RuntimeError( BINARY_NOT_FOUND_MESSAGE )
+    # Used to ensure that starting/stopping of the server is synchronized
+    self._server_state_mutex = threading.RLock()
+    self._server_starting = threading.Event()
+    self._server_handle = None
+    self._server_logfile = None
+    self._server_started = False
+    self._server_status = None
 
-    self._StartServer()
+    self._toolchain = None
+    self._rustup = None
+    self._rustup_version = None
+    self._rls = None
+    self._rls_version = None
 
+    self._notification_queue = deque()
 
-  def _GetRustSrcPath( self ):
-    """
-    Attempt to read user option for rust_src_path. Fallback to environment
-    variable if it's not provided.
-    Finally try to be smart and figure out the path assuming the user set up
-    rust by the means of rustup.
-    """
-    rust_src_path = ( self.user_options[ 'rust_src_path' ] or
-                      os.environ.get( 'RUST_SRC_PATH' ) )
-
-    if rust_src_path:
-      return ExpandVariablesInPath( rust_src_path )
-
-    # Try to figure out the src path using rustup
-    rustc_executable = FindExecutable( 'rustc' )
-    if not rustc_executable:
-      return None
-
-    rust_sysroot = _GetRustSysroot( rustc_executable )
-    rust_src_path = p.join( rust_sysroot,
-                            'lib',
-                            'rustlib',
-                            'src',
-                            'rust',
-                            'src' )
-    return rust_src_path if p.isdir( rust_src_path ) else None
+    self._connection = None
 
 
   def SupportedFiletypes( self ):
     return [ 'rust' ]
 
 
-  def _GetResponse( self, handler, request_data = None,
-                    method = 'POST'):
-    """
-    Query racerd via HTTP
-
-    racerd returns JSON with 200 OK responses. 204 No Content responses occur
-    when no errors were encountered but no completions, definitions, or errors
-    were found.
-    """
-    _logger.info( 'RustCompleter._GetResponse' )
-    handler = ToBytes( handler )
-    method = ToBytes( method )
-    url = urljoin( ToBytes( self._racerd_host ), handler )
-    parameters = self._ConvertToRacerdRequest( request_data )
-    body = ToBytes( json.dumps( parameters ) ) if parameters else bytes()
-    extra_headers = self._ExtraHeaders( method, handler, body )
-
-    _logger.debug( 'Making racerd request: %s %s %s %s', method, url,
-                   extra_headers, body )
-
-    # Failing to wrap the method & url bytes objects in `native()` causes HMAC
-    # failures (403 Forbidden from racerd) for unknown reasons. Similar for
-    # request_hmac above.
-    response = requests.request( native( method ),
-                                 native( url ),
-                                 data = body,
-                                 headers = extra_headers )
-
-    response.raise_for_status()
-
-    if response.status_code == requests.codes.no_content:
-      return None
-
-    return response.json()
-
-
-  def _ExtraHeaders( self, method, handler, body ):
-    if not body:
-      body = bytes()
-
-    hmac = hmac_utils.CreateRequestHmac( method,
-                                         handler,
-                                         body,
-                                         self._hmac_secret )
-    final_hmac_value = native( ToBytes( binascii.hexlify( hmac ) ) )
-
-    extra_headers = { 'content-type': 'application/json' }
-    extra_headers[ RACERD_HMAC_HEADER ] = final_hmac_value
-    return extra_headers
-
-
-  def _ConvertToRacerdRequest( self, request_data ):
-    """
-    Transform ycm request into racerd request
-    """
-    if not request_data:
-      return None
-
-    file_path = request_data[ 'filepath' ]
-    buffers = []
-    for path, obj in iteritems( request_data[ 'file_data' ] ):
-      buffers.append( {
-        'contents': obj[ 'contents' ],
-        'file_path': path
-      } )
-
-    line = request_data[ 'line_num' ]
-    col = request_data[ 'column_num' ] - 1
-
+  def GetSubcommandsMap( self ):
     return {
-      'buffers': buffers,
-      'line': line,
-      'column': col,
-      'file_path': file_path
+      # Handled by base class
+      'Format': (
+        lambda self, request_data, args: self.Format( request_data )
+       ),
+      'GoToDeclaration': (
+        lambda self, request_data, args: self.GoToDeclaration( request_data )
+      ),
+      'GoTo': (
+        lambda self, request_data, args: self.GoToDeclaration( request_data )
+      ),
+      'GoToDefinition': (
+        lambda self, request_data, args: self.GoToDeclaration( request_data )
+      ),
+      'GoToReferences': (
+        lambda self, request_data, args: self.GoToReferences( request_data )
+      ),
+      'RefactorRename': (
+        lambda self, request_data, args: self.RefactorRename( request_data,
+                                                              args )
+      ),
+
+      # Handled by us
+      'RestartServer': (
+        lambda self, request_data, args: self._RestartServer( request_data )
+      ),
+      'StopServer': (
+        lambda self, request_data, args: self._StopServer()
+      ),
+      'GetDoc': (
+        lambda self, request_data, args: self.GetDoc( request_data )
+      ),
+      'GetType': (
+        lambda self, request_data, args: self.GetType( request_data )
+      )
     }
 
 
-  def _GetExtraData( self, completion ):
-    location = {}
-    if completion[ 'file_path' ]:
-      location[ 'filepath' ] = completion[ 'file_path' ]
-    if completion[ 'line' ]:
-      location[ 'line_num' ] = completion[ 'line' ]
-    if completion[ 'column' ]:
-      location[ 'column_num' ] = completion[ 'column' ] + 1
+  def GetConnection( self ):
+    return self._connection
 
-    if location:
-      return { 'location': location }
 
+  def OnFileReadyToParse( self, request_data ):
+    self._StartServer( request_data )
+
+    return super( RustCompleter, self ).OnFileReadyToParse( request_data )
+
+
+  def _FindRustup( self ):
+    for path in [ 'rustup', os.path.expanduser( '~/.cargo/bin/rustup' ) ]:
+      rustup = utils.FindExecutable( path )
+      if rustup:
+        return rustup
+
+    self._Notify( "Could not find rustup. Install it by following the "
+                  "instructions on https://www.rustup.rs/ then "
+                  "run the 'RestartServer' subcommand." )
     return None
 
 
-  def ComputeCandidatesInner( self, request_data ):
-    try:
-      completions = self._FetchCompletions( request_data )
-    except requests.HTTPError:
-      if not self._rust_source_path:
-        raise RuntimeError( ERROR_FROM_RACERD_MESSAGE )
-      raise
+  def _GetToolchainFullName( self, rustup ):
+    toolchains = _GetCommandOutput( [ rustup, 'toolchain', 'list' ] )
+    for line in toolchains.splitlines():
+      match = RUSTUP_TOOLCHAIN_REGEX.search( line )
+      if not match:
+        _logger.error( "Cannot parse '{line}' as a toolchain "
+                       "in rustup output.".format( line = line ) )
+        continue
 
-    if not completions:
-      return []
-
-    return [ responses.BuildCompletionData(
-                insertion_text = completion[ 'text' ],
-                kind = completion[ 'kind' ],
-                extra_menu_info = completion[ 'context' ],
-                extra_data = self._GetExtraData( completion ) )
-             for completion in completions ]
+      toolchain = match.group( 'toolchain' )
+      if TOOLCHAIN_CHANNEL in toolchain and TOOLCHAIN_DATE in toolchain:
+        return toolchain
+    return None
 
 
-  def _FetchCompletions( self, request_data ):
-    return self._GetResponse( '/list_completions', request_data )
+  def _GetRustupAndToolchain( self ):
+    rustup = self._FindRustup()
+    if not rustup:
+      return None, None
+
+    toolchain = self._GetToolchainFullName( rustup )
+    if toolchain:
+      return rustup, toolchain
+
+    result = self._RunCommandAndNotify( [ rustup, 'toolchain', 'install',
+                                          TOOLCHAIN ] )
+    if not result:
+      self._Notify( 'Failed to install toolchain {toolchain}.'.format(
+        toolchain = TOOLCHAIN ) )
+      return rustup, None
+
+    toolchain = self._GetToolchainFullName( rustup )
+    if toolchain:
+      return rustup, toolchain
+
+    self._Notify( 'Failed to get toolchain {toolchain}.'.format(
+      toolchain = TOOLCHAIN ) )
+    return rustup, None
 
 
-  def _StartServer( self ):
-    with self._server_state_lock:
-      self._racerd_port = utils.GetUnusedLocalhostPort()
-      self._hmac_secret = self._CreateHmacSecret()
-
-      # racerd will delete the secret_file after it's done reading it
-      with tempfile.NamedTemporaryFile( delete = False ) as secret_file:
-        secret_file.write( self._hmac_secret )
-        args = [ self._racerd_binary, 'serve',
-                '--port', str( self._racerd_port ),
-                '-l',
-                '--secret-file', secret_file.name ]
-
-      # Enable logging of crashes
-      env = os.environ.copy()
-      SetEnviron( env, 'RUST_BACKTRACE', '1' )
-
-      if self._rust_source_path:
-        args.extend( [ '--rust-src-path', self._rust_source_path ] )
-
-      self._server_stdout = utils.CreateLogfile(
-          LOGFILE_FORMAT.format( port = self._racerd_port, std = 'stdout' ) )
-      self._server_stderr = utils.CreateLogfile(
-          LOGFILE_FORMAT.format( port = self._racerd_port, std = 'stderr' ) )
-
-      with utils.OpenForStdHandle( self._server_stderr ) as fstderr:
-        with utils.OpenForStdHandle( self._server_stdout ) as fstdout:
-          self._racerd_phandle = utils.SafePopen( args,
-                                                  stdout = fstdout,
-                                                  stderr = fstderr,
-                                                  env = env )
-
-      self._racerd_host = 'http://127.0.0.1:{0}'.format( self._racerd_port )
-      if not self._ServerIsRunning():
-        raise RuntimeError( 'Failed to start racerd!' )
-      _logger.info( 'Racerd started on: ' + self._racerd_host )
+  def _GetRustupVersion( self, rustup ):
+    rustup_version = _GetCommandOutput( [ rustup, '--version' ] )
+    match = RUSTUP_VERSION.match( rustup_version )
+    if match:
+      return match.group( 'version' )
+    self._Notify( 'Cannot parse rustup version.' )
+    return None
 
 
-  def _ServerIsRunning( self ):
-    """
-    Check if racerd is alive. That doesn't necessarily mean it's ready to serve
-    requests; that's checked by ServerIsHealthy.
-    """
-    with self._server_state_lock:
-      return ( bool( self._racerd_host ) and
-               ProcessIsRunning( self._racerd_phandle ) )
+  def _GetRlsVersion( self, rls ):
+    rls_version = _GetCommandOutput( [ rls, '--version' ] )
+    match = RLS_VERSION.match( rls_version )
+    if match:
+      return match.group( 'version' )
+    self._Notify( 'Cannot parse Rust Language Server version.' )
+    return None
 
 
-  def ServerIsHealthy( self ):
-    """
-    Check if racerd is alive AND ready to serve requests.
-    """
-    if not self._ServerIsRunning():
-      _logger.debug( 'Racerd not running.' )
-      return False
-    try:
-      self._GetResponse( '/ping', method = 'GET' )
-      return True
-    # Do NOT make this except clause more generic! If you need to catch more
-    # exception types, list them all out. Having `Exception` here caused FORTY
-    # HOURS OF DEBUGGING.
-    except requests.exceptions.ConnectionError as e:
-      _logger.exception( e )
-      return False
+  def _FindRls( self ):
+    rustup, toolchain = self._GetRustupAndToolchain()
+    if not rustup or not toolchain:
+      return None
+
+    self._rustup = rustup
+    self._rustup_version = self._GetRustupVersion( self._rustup )
+    self._toolchain = toolchain
+
+    toolchain_dir = _GetCommandOutput(
+      [ rustup, 'run', toolchain, 'rustc', '--print', 'sysroot' ] )
+    rls = os.path.join( toolchain_dir, 'bin', 'rls' )
+
+    if not utils.FindExecutable( rls ):
+      self._InstallRls( rustup, toolchain )
+
+    rls = utils.FindExecutable( rls )
+    if rls:
+      self._rls = rls
+      self._rls_version = self._GetRlsVersion( rls )
+    return rls
 
 
-  def _StopServer( self ):
-    with self._server_state_lock:
-      if self._racerd_phandle:
-        _logger.info( 'Stopping Racerd with PID {0}'.format(
-                          self._racerd_phandle.pid ) )
-        self._racerd_phandle.terminate()
-        try:
-          utils.WaitUntilProcessIsTerminated( self._racerd_phandle,
-                                              timeout = 5 )
-          _logger.info( 'Racerd stopped' )
-        except RuntimeError:
-          _logger.exception( 'Error while stopping Racerd' )
+  def _InstallRls( self, rustup, toolchain ):
+    result = self._RunCommandAndNotify( [ rustup, 'self', 'update' ] )
+    if not result:
+      self._Notify( 'Failed to update rustup.' )
+      return
 
-      self._CleanUp()
+    result = self._RunCommandAndNotify( [ rustup, 'update', toolchain ] )
+    if not result:
+      self._Notify( 'Failed to update toolchain {toolchain}.'.format(
+        toolchain = toolchain ) )
+      return
 
+    for component in [ 'rls-preview', 'rust-analysis', 'rust-src' ]:
+      result = self._RunCommandAndNotify( [
+        rustup, 'component', 'add', component, '--toolchain', toolchain ] )
+      if not result:
+        self._Notify( 'Failed to update component {component}.'.format(
+          component = component ) )
+        return
 
-  def _CleanUp( self ):
-    self._racerd_phandle = None
-    self._racerd_port = None
-    self._racerd_host = None
-    if not self._keep_logfiles:
-      if self._server_stdout:
-        utils.RemoveIfExists( self._server_stdout )
-        self._server_stdout = None
-      if self._server_stderr:
-        utils.RemoveIfExists( self._server_stderr )
-        self._server_stderr = None
+    message = ( 'Rust Language Server for toolchain {toolchain} '
+                'installed.'.format( toolchain = toolchain ) )
+    self._Notify( message, level = 'info' )
 
 
-  def _RestartServer( self ):
-    _logger.debug( 'RustCompleter restarting racerd' )
+  def DebugInfo( self, request_data ):
+    return responses.BuildDebugInfoResponse(
+      name = 'Rust',
+      servers = [
+        responses.DebugInfoServer(
+          name = 'Rust Language Server',
+          handle = self._server_handle,
+          executable = self._rls,
+          logfiles = [
+            self._server_logfile
+          ],
+          extras = [
+            responses.DebugInfoItem( 'status', self._server_status ),
+            responses.DebugInfoItem( 'version', self._rls_version ),
+          ]
+        )
+      ],
+      items = [
+        responses.DebugInfoItem( 'Rustup path', self._rustup ),
+        responses.DebugInfoItem( 'Rustup version', self._rustup_version ),
+        responses.DebugInfoItem( 'Toolchain', self._toolchain )
+      ]
+    )
 
-    with self._server_state_lock:
-      if self._ServerIsRunning():
-        self._StopServer()
-      self._StartServer()
-
-    _logger.debug( 'RustCompleter has restarted racerd' )
-
-
-  def GetSubcommandsMap( self ):
-    return {
-      'GoTo' : ( lambda self, request_data, args:
-                 self._GoToDefinition( request_data ) ),
-      'GoToDefinition' : ( lambda self, request_data, args:
-                           self._GoToDefinition( request_data ) ),
-      'GoToDeclaration' : ( lambda self, request_data, args:
-                           self._GoToDefinition( request_data ) ),
-      'StopServer' : ( lambda self, request_data, args:
-                           self._StopServer() ),
-      'RestartServer' : ( lambda self, request_data, args:
-                           self._RestartServer() ),
-      'GetDoc' : ( lambda self, request_data, args:
-                           self._GetDoc( request_data ) ),
-    }
-
-
-  def _GoToDefinition( self, request_data ):
-    try:
-      definition = self._GetResponse( '/find_definition',
-                                      request_data )
-      return responses.BuildGoToResponse( definition[ 'file_path' ],
-                                          definition[ 'line' ],
-                                          definition[ 'column' ] + 1 )
-    except Exception as e:
-      _logger.exception( e )
-      raise RuntimeError( 'Can\'t jump to definition.' )
-
-
-  def _GetDoc( self, request_data ):
-    try:
-      definition = self._GetResponse( '/find_definition',
-                                      request_data )
-
-      docs = [ definition[ 'context' ], definition[ 'docs' ] ]
-      return responses.BuildDetailedInfoResponse( '\n---\n'.join( docs ) )
-    except Exception as e:
-      _logger.exception( e )
-      raise RuntimeError( 'Can\'t lookup docs.' )
 
   def Shutdown( self ):
     self._StopServer()
 
 
-  def _CreateHmacSecret( self ):
-    return base64.b64encode( os.urandom( HMAC_SECRET_LENGTH ) )
+  def ServerIsHealthy( self ):
+    return self._ServerIsRunning()
 
 
-  def DebugInfo( self, request_data ):
-    with self._server_state_lock:
-      racerd_server = responses.DebugInfoServer(
-        name = 'Racerd',
-        handle = self._racerd_phandle,
-        executable = self._racerd_binary,
-        address = '127.0.0.1',
-        port = self._racerd_port,
-        logfiles = [ self._server_stdout, self._server_stderr ] )
+  def ServerIsReady( self ):
+    return ( self.ServerIsHealthy() and
+             super( RustCompleter, self ).ServerIsReady() )
 
-      rust_sources_item = responses.DebugInfoItem(
-        key = 'Rust sources',
-        value = self._rust_source_path )
 
-      return responses.BuildDebugInfoResponse( name = 'Rust',
-                                               servers = [ racerd_server ],
-                                               items = [ rust_sources_item ] )
+  def _ServerIsRunning( self ):
+    return utils.ProcessIsRunning( self._server_handle )
+
+
+  def _RestartServer( self, request_data ):
+    with self._server_state_mutex:
+      self._StopServer()
+      self._StartServer( request_data )
+
+
+  def _StartServer( self, request_data ):
+    with self._server_state_mutex:
+      if self._server_starting.is_set():
+        raise RuntimeError( 'Already starting server.' )
+
+      self._server_starting.set()
+
+    thread = threading.Thread( target = self._StartServerInThread,
+                               args = ( request_data, ) )
+    thread.daemon = True
+    thread.start()
+
+
+  def _StartServerInThread( self, request_data ):
+    try:
+      if self._server_started:
+        return
+
+      self._server_started = True
+
+      rls = self._FindRls()
+      if not rls:
+        return
+
+      _logger.info( 'Starting Rust Language Server...' )
+
+      self._server_logfile = utils.CreateLogfile( LOGFILE_FORMAT )
+
+      env = os.environ.copy()
+      if _logger.isEnabledFor( logging.DEBUG ):
+        utils.SetEnviron( env, 'RUST_LOG', 'rls::server=trace' )
+        utils.SetEnviron( env, 'RUST_BACKTRACE', '1' )
+
+      # RLS may use the wrong standard library if the active toolchain is not
+      # the same as the one the server is running on. Set the active toolchain
+      # through the RUSTUP_TOOLCHAIN environment variable.
+      utils.SetEnviron( env, 'RUSTUP_TOOLCHAIN', self._toolchain )
+
+      with utils.OpenForStdHandle( self._server_logfile ) as stderr:
+        self._server_handle = utils.SafePopen( rls,
+                                               stdin = PIPE,
+                                               stdout = PIPE,
+                                               stderr = stderr,
+                                               env = env )
+
+      if not self._ServerIsRunning():
+        self._Notify( 'Rust Language Server failed to start.' )
+        return
+
+      _logger.info( 'Rust Language Server started.' )
+
+      self._connection = (
+        language_server_completer.StandardIOLanguageServerConnection(
+          self._server_handle.stdin,
+          self._server_handle.stdout,
+          self.GetDefaultNotificationHandler() )
+      )
+
+      self._connection.start()
+
+      try:
+        self._connection.AwaitServerConnection()
+      except language_server_completer.LanguageServerConnectionTimeout:
+        self._Notify( 'Rust Language Server failed to start, or did not '
+                      'connect successfully.' )
+        self._StopServer()
+        return
+
+      self.SendInitialize( request_data )
+    finally:
+      self._server_starting.clear()
+
+
+  def _StopServer( self ):
+    with self._server_state_mutex:
+      _logger.info( 'Shutting down Rust Language Server...' )
+      # We don't use utils.CloseStandardStreams, because the stdin/out is
+      # connected to our server connector. Just close stderr.
+      #
+      # The other streams are closed by the LanguageServerConnection when we
+      # call Close.
+      if self._server_handle and self._server_handle.stderr:
+        self._server_handle.stderr.close()
+
+      # Tell the connection to expect the server to disconnect.
+      if self._connection:
+        self._connection.Stop()
+
+      if not self._ServerIsRunning():
+        _logger.info( 'Rust Language Server not running' )
+        self._CleanUp()
+        return
+
+      _logger.info( 'Stopping Rust Language Server with PID {0}'.format(
+         self._server_handle.pid ) )
+
+      try:
+        self.ShutdownServer()
+
+        # By this point, the server should have shut down and terminated. To
+        # ensure that isn't blocked, we close all of our connections and wait
+        # for the process to exit.
+        #
+        # If, after a small delay, the server has not shut down we do NOT kill
+        # it; we expect that it will shut itself down eventually. This is
+        # predominantly due to strange process behaviour on Windows.
+        if self._connection:
+          self._connection.Close()
+
+        utils.WaitUntilProcessIsTerminated( self._server_handle,
+                                            timeout = 15 )
+
+        _logger.info( 'Rust Language server stopped' )
+      except Exception:
+        _logger.exception( 'Error while stopping Rust Language Server' )
+        # We leave the process running. Hopefully it will eventually die of its
+        # own accord.
+
+      # Tidy up our internal state, even if the completer server didn't close
+      # down cleanly.
+      self._CleanUp()
+
+
+  def _CleanUp( self ):
+    self._server_handle = None
+    self._server_started = False
+    self._server_status = None
+    self._connection = None
+    self.ServerReset()
+    if not self._server_keep_logfiles:
+      if self._server_logfile:
+        utils.RemoveIfExists( self._server_logfile )
+        self._server_logfile = None
+
+
+  def _ShouldResolveCompletionItems( self ):
+    # FIXME: RLS tells us that it can resolve a completion but it doesn't
+    # follow the protocol since it returns a list containing one completion
+    # instead of the completion item directly. In addition, it doesn't return
+    # any additional information so there is no point to resolve a completion.
+    return False
+
+
+  def HandleNotificationInPollThread( self, notification ):
+    # FIXME: the build status is currently displayed in the debug info. We
+    # should notify the client about it through a special status/progress
+    # message.
+    if notification[ 'method' ] == 'rustDocument/beginBuild':
+      self._server_status = 'building'
+      return
+
+    if notification[ 'method' ] == 'rustDocument/diagnosticsEnd':
+      self._server_status = 'ready'
+      return
+
+    super( RustCompleter, self ).HandleNotificationInPollThread( notification )
+
+
+  def _Notify( self, message, level = 'error' ):
+    getattr( _logger, level )( message )
+    self._notification_queue.append(
+      responses.BuildDisplayMessageResponse( message ) )
+
+
+  def _RunCommandAndNotify( self, command ):
+    handle = utils.SafePopen( command, stdout = PIPE, stderr = STDOUT )
+    for line in handle.stdout:
+      message = utils.ToUnicode( line.strip() )
+      if message:
+        self._Notify( message, level = 'debug' )
+
+    handle.communicate()
+    return handle.returncode == 0
+
+
+  def PollForMessagesInner( self, request_data, timeout ):
+    expiration = time.time() + timeout
+    while True:
+      if time.time() > expiration:
+        return True
+
+      # If there are messages pending in the queue, return them immediately
+      messages = self._GetPendingMessages( request_data )
+      if messages:
+        return messages
+
+      try:
+        return [ self._notification_queue.popleft() ]
+      except IndexError:
+        time.sleep( 0.1 )
+
+
+  def GetType( self, request_data ):
+    hover_response = self.GetHoverResponse( request_data )
+
+    # RLS returns a list that may contain the following elements:
+    # - a documentation string;
+    # - a documentation url;
+    # - [{language:rust, value:<type info>}].
+
+    for item in hover_response:
+      if isinstance( item, dict ) and 'value' in item:
+        return responses.BuildDisplayMessageResponse( item[ 'value' ] )
+
+    raise RuntimeError( 'Unknown type.' )
+
+
+  def GetDoc( self, request_data ):
+    hover_response = self.GetHoverResponse( request_data )
+
+    # RLS returns a list that may contain the following elements:
+    # - a documentation string;
+    # - a documentation url;
+    # - [{language:rust, value:<type info>}].
+
+    documentation = '\n'.join(
+      [ item.strip() for item in hover_response if isinstance( item, str ) ] )
+
+    if not documentation:
+      raise RuntimeError( 'No documentation available for current context.' )
+
+    return responses.BuildDetailedInfoResponse( documentation )
+
+
+  def HandleServerCommand( self, request_data, command ):
+    return None

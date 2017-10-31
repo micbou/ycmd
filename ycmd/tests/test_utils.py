@@ -27,6 +27,7 @@ from builtins import *  # noqa
 from future.utils import iteritems, PY2
 from hamcrest import contains_string, has_entry, has_entries, assert_that
 from mock import patch
+from pprint import pformat
 from webtest import TestApp
 import bottle
 import contextlib
@@ -127,6 +128,13 @@ def LocationMatcher( filepath, line_num, column_num ):
     'line_num': line_num,
     'column_num': column_num,
     'filepath': filepath
+  } )
+
+
+def RangeMatcher( filepath, start, end ):
+  return has_entries( {
+    'start': LocationMatcher( filepath, *start ),
+    'end': LocationMatcher( filepath, *end ),
   } )
 
 
@@ -341,3 +349,58 @@ def WithRetry( test ):
         print( 'Test failed, retrying: {0}'.format( str( test_exception ) ) )
         time.sleep( 0.25 )
   return wrapper
+
+
+def WaitForDiagnosticsToBeReady( app, filepath, contents, filetype, **kwargs ):
+  results = None
+  for tries in range( 0, 60 ):
+    event_data = BuildRequest( event_name = 'FileReadyToParse',
+                               contents = contents,
+                               filepath = filepath,
+                               filetype = filetype,
+                               **kwargs )
+
+    results = app.post_json( '/event_notification', event_data ).json
+
+    if results:
+      break
+
+    time.sleep( 0.5 )
+
+  return results
+
+
+class PollForMessagesTimeoutException( Exception ):
+  pass
+
+
+def PollForMessages( app, request_data, timeout = 30 ):
+  expiration = time.time() + timeout
+  while True:
+    if time.time() > expiration:
+      raise PollForMessagesTimeoutException(
+        'Waited for diagnostics to be ready for {0} seconds, aborting.'.format(
+          timeout ) )
+
+    default_args = {
+      'line_num'  : 1,
+      'column_num': 1,
+    }
+    args = dict( default_args )
+    args.update( request_data )
+
+    response = app.post_json( '/receive_messages', BuildRequest( **args ) ).json
+
+    print( 'poll response: {0}'.format( pformat( response ) ) )
+
+    if isinstance( response, bool ):
+      if not response:
+        raise RuntimeError( 'The message poll was aborted by the server' )
+    elif isinstance( response, list ):
+      for message in response:
+        yield message
+    else:
+      raise AssertionError( 'Message poll response was wrong type: {0}'.format(
+        type( response ).__name__ ) )
+
+    time.sleep( 0.25 )
