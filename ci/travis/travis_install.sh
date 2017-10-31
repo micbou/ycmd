@@ -87,12 +87,10 @@ echo -e "import coverage\ncoverage.process_startup()" > \
 # Rust setup
 ############
 
-curl https://sh.rustup.rs -sSf | sh -s -- -y
+curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain none
 
 export PATH="${HOME}/.cargo/bin:${PATH}"
-rustup update
-rustc -Vv
-cargo -V
+rustup --version
 
 #################################
 # JavaScript and TypeScript setup

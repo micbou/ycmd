@@ -37,7 +37,7 @@ def DebugInfo_NotInitialized_test( app ):
   assert_that(
     app.post_json( '/debug_info', request_data ).json,
     has_entry( 'completer', has_entries( {
-      'name': 'clangd',
+      'name': 'Clangd',
       'servers': contains( has_entries( {
         'name': 'clangd',
         'pid': None,
@@ -71,7 +71,7 @@ def DebugInfo_Initialized_test( app ):
   assert_that(
     app.post_json( '/debug_info', request_data ).json,
     has_entry( 'completer', has_entries( {
-      'name': 'clangd',
+      'name': 'Clangd',
       'servers': contains( has_entries( {
         'name': 'clangd',
         'is_running': True,

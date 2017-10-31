@@ -102,15 +102,10 @@ echo "export PATH=/Library/Frameworks/Mono.framework/Versions/Current/Commands:\
 # Rust setup
 ############
 
-curl https://sh.rustup.rs -sSf | sh -s -- -y
+curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain none
 
-CARGO_PATH="${HOME}/.cargo/bin"
-PATH="${CARGO_PATH}:${PATH}"
-rustup update
-rustc -Vv
-cargo -V
-
-echo "export PATH=${CARGO_PATH}:\$PATH" >> $BASH_ENV
+echo "export PATH=${HOME}/.cargo/bin:\$PATH" >> $BASH_ENV
+rustup --version
 
 #################
 # Java 8 setup
