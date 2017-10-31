@@ -85,6 +85,10 @@ class RustCompleter( language_server_completer.LanguageServerCompleter ):
   def GetSubcommandsMap( self ):
     return {
       # Handled by base class
+      'FixIt': (
+        lambda self, request_data, args: self.GetCodeActions( request_data,
+                                                              args )
+      ),
       'Format': (
         lambda self, request_data, args: self.Format( request_data )
        ),
@@ -352,6 +356,7 @@ class RustCompleter( language_server_completer.LanguageServerCompleter ):
         language_server_completer.StandardIOLanguageServerConnection(
           self._server_handle.stdin,
           self._server_handle.stdout,
+          self.GetDefaultRequestHandler(),
           self.GetDefaultNotificationHandler() )
       )
 
@@ -519,7 +524,3 @@ class RustCompleter( language_server_completer.LanguageServerCompleter ):
       raise RuntimeError( 'No documentation available for current context.' )
 
     return responses.BuildDetailedInfoResponse( documentation )
-
-
-  def HandleServerCommand( self, request_data, command ):
-    return None

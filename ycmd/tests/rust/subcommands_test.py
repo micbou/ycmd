@@ -102,7 +102,8 @@ def Subcommands_DefinedSubcommands_test( app ):
   subcommands_data = BuildRequest( completer_target = 'rust' )
 
   assert_that( app.post_json( '/defined_subcommands', subcommands_data ).json,
-               contains_inanyorder( 'Format',
+               contains_inanyorder( 'FixIt',
+                                    'Format',
                                     'GetDoc',
                                     'GetType',
                                     'GoTo',
@@ -137,6 +138,7 @@ def Subcommands_ServerNotReady_test():
       }
     } )
 
+  yield Test, 'FixIt', []
   yield Test, 'Format', []
   yield Test, 'GetType', []
   yield Test, 'GetDoc', []
@@ -145,6 +147,38 @@ def Subcommands_ServerNotReady_test():
   yield Test, 'GoToDefinition', []
   yield Test, 'GoToReferences', []
   yield Test, 'RefactorRename', [ 'test' ]
+
+
+# TODO: add another FixIt test for rls.applySuggestion?
+
+
+@SharedYcmd
+def Subcommands_FixIt_DeglobImport_test( app ):
+  filepath = PathToTestFile( 'common', 'src', 'main.rs' )
+
+  RunTest( app, {
+    'description': 'FixIt on an import statement with a globbing pattern '
+                   'replaces it with imports of the names actually imported',
+    'request': {
+      'command': 'FixIt',
+      'line_num': 3,
+      'column_num': 9,
+      'filepath': filepath,
+    },
+    'expect': {
+      'response': requests.codes.ok,
+      'data': has_entries( {
+        'fixits': contains( has_entries( {
+          'text': 'Deglob Import',
+          'chunks': contains(
+            ChunkMatcher( 'create_universe',
+                          LocationMatcher( filepath, 3, 11 ),
+                          LocationMatcher( filepath, 3, 12 ) )
+          )
+        } ) )
+      } )
+    }
+  } )
 
 
 @SharedYcmd

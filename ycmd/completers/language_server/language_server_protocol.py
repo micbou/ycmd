@@ -385,6 +385,13 @@ def Range( request_data ):
   }
 
 
+def ExecuteCommand( request_id, command, arguments = [] ):
+  return BuildRequest( request_id, 'workspace/executeCommand', {
+    'command': command,
+    'arguments': arguments
+  } )
+
+
 def FilePathToUri( file_name ):
   return urljoin( 'file:', pathname2url( file_name ) )
 

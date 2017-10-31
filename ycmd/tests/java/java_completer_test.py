@@ -220,9 +220,11 @@ def JavaCompleter_UnknownCommand_test( app ):
     'command': 'this_is_not_a_real_command',
     'params': {}
   }
-  assert_that( completer.HandleServerCommand( BuildRequest(), notification ),
-               equal_to( None ) )
-
+  assert_that(
+    calling( completer.HandleServerCommand ).with_args( BuildRequest(),
+                                                        notification ),
+    raises( RuntimeError, 'Unknown command this_is_not_a_real_command.' )
+  )
 
 
 @patch( 'ycmd.completers.java.java_completer.ShouldEnableJavaCompleter',

@@ -29,6 +29,7 @@ import logging
 import os
 import queue
 import threading
+import time
 
 from ycmd.completers.completer import Completer
 from ycmd.completers.completer_utils import GetFileContents
@@ -237,7 +238,7 @@ class LanguageServerConnection( threading.Thread ):
     pass # pragma: no cover
 
 
-  def __init__( self, notification_handler = None ):
+  def __init__( self, request_handler = None, notification_handler = None ):
     super( LanguageServerConnection, self ).__init__()
 
     self._last_id = 0
@@ -247,6 +248,7 @@ class LanguageServerConnection( threading.Thread ):
 
     self._connection_event = threading.Event()
     self._stop_event = threading.Event()
+    self._request_handler = request_handler
     self._notification_handler = notification_handler
 
 
@@ -468,7 +470,11 @@ class LanguageServerConnection( threading.Thread ):
     LanguageServerCompleter."""
     if 'method' in message:
       if 'id' in message:
-        # We received a request. Ignore it.
+        # We received a request. If there is an immediate
+        # (in-message-pump-thread) handler configured, call it. Otherwise,
+        # discard the request.
+        if self._request_handler:
+          self._request_handler( self, message )
         return
 
       # We received a notification.
@@ -516,8 +522,10 @@ class StandardIOLanguageServerConnection( LanguageServerConnection ):
   def __init__( self,
                 server_stdin,
                 server_stdout,
+                request_handler = None,
                 notification_handler = None ):
     super( StandardIOLanguageServerConnection, self ).__init__(
+      request_handler,
       notification_handler )
 
     self._server_stdin = server_stdin
@@ -580,9 +588,9 @@ class LanguageServerCompleter( Completer ):
   implementations are required to:
     - Handle downstream server state and create a LanguageServerConnection,
       returning it in GetConnection
+      - Set its request handler to self.GetDefaultRequestHandler()
       - Set its notification handler to self.GetDefaultNotificationHandler()
       - See below for Startup/Shutdown instructions
-    - Implement any server-specific Commands in HandleServerCommand
     - Implement the following Completer abstract methods:
       - SupportedFiletypes
       - DebugInfo
@@ -639,11 +647,6 @@ class LanguageServerCompleter( Completer ):
     pass # pragma: no cover
 
 
-  @abc.abstractmethod
-  def HandleServerCommand( self, request_data, command ):
-    pass # pragma: no cover
-
-
   def __init__( self, user_options):
     super( LanguageServerCompleter, self ).__init__( user_options )
 
@@ -670,6 +673,7 @@ class LanguageServerCompleter( Completer ):
     the downstream server."""
     with self._server_info_mutex:
       self._server_file_state = lsp.ServerFileStateStore()
+      self._latest_workspace_edit = None
       self._latest_diagnostics = collections.defaultdict( list )
       self._sync_type = 'Full'
       self._initialize_response = None
@@ -1000,6 +1004,41 @@ class LanguageServerCompleter( Completer ):
       return True
 
 
+  def _AwaitWorkspaceEdit( self, timeout ):
+    """Block until we receive a workspace edit."""
+    expiration = time.time() + timeout
+    while True:
+      if time.time() > expiration:
+        raise LanguageServerConnectionTimeout(
+          'Timed out waiting for workspace edit.' )
+
+      try:
+        with self._server_info_mutex:
+          workspace_edit = self._latest_workspace_edit
+          if workspace_edit:
+            self._latest_workspace_edit = None
+            return workspace_edit
+      except IndexError:
+        time.sleep( 0.1 )
+
+
+  def GetDefaultRequestHandler( self ):
+    """Return a request handler method suitable for passing to
+    LanguageServerConnection constructor"""
+    def handler( server, request ):
+      self.HandleRequestInPollThread( request )
+    return handler
+
+
+  def HandleRequestInPollThread( self, request ):
+    """Called by the LanguageServerConnection in its message pump context when a
+    request arrives."""
+
+    if request[ 'method' ] == 'workspace/applyEdit':
+      with self._server_info_mutex:
+        self._latest_workspace_edit = request[ 'params' ][ 'edit' ]
+
+
   def GetDefaultNotificationHandler( self ):
     """Return a notification handler method suitable for passing to
     LanguageServerConnection constructor"""
@@ -1234,6 +1273,7 @@ class LanguageServerCompleter( Completer ):
     with self._server_info_mutex:
       self._server_capabilities = response[ 'result' ][ 'capabilities' ]
       self._resolve_completion_items = self._ShouldResolveCompletionItems()
+      self._commands = self._GetCommands()
 
       if 'textDocumentSync' in self._server_capabilities:
         sync = self._server_capabilities[ 'textDocumentSync' ]
@@ -1478,6 +1518,36 @@ class LanguageServerCompleter( Completer ):
                           request_data[ 'column_num' ],
                           request_data[ 'filepath' ] ),
       chunks ) ] )
+
+
+  def _GetCommands( self ):
+    return ( 'executeCommandProvider' in self._server_capabilities and
+             self._server_capabilities[ 'executeCommandProvider' ].get(
+               'commands',
+               [] ) )
+
+
+  def HandleServerCommand( self, request_data, command ):
+    command_name = command[ 'command' ]
+    if command_name not in self._commands:
+      raise RuntimeError( 'Unknown command {command}.'.format(
+        command = command_name ) )
+
+    request_id = self.GetConnection().NextRequestId()
+    message = lsp.ExecuteCommand( request_id,
+                                  command_name,
+                                  command[ 'arguments' ] )
+    # TODO: handle the response.
+    self.GetConnection().GetResponse( request_id,
+                                      message,
+                                      REQUEST_TIMEOUT_COMMAND )
+    workspace_edit = self._AwaitWorkspaceEdit( REQUEST_TIMEOUT_COMMAND )
+    fixit = WorkspaceEditToFixIt( request_data,
+                                  workspace_edit,
+                                  text = command[ 'title' ] )
+    # TODO: tell the server we succesfully applied the workspace edit.
+    return fixit
+
 
 
 def _CompletionItemToCompletionData( insertion_text, item, fixits ):

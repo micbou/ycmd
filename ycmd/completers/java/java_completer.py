@@ -365,6 +365,7 @@ class JavaCompleter( language_server_completer.LanguageServerCompleter ):
         language_server_completer.StandardIOLanguageServerConnection(
           self._server_handle.stdin,
           self._server_handle.stdout,
+          self.GetDefaultRequestHandler(),
           self.GetDefaultNotificationHandler() )
       )
 
@@ -553,4 +554,5 @@ class JavaCompleter( language_server_completer.LanguageServerCompleter ):
         command[ 'arguments' ][ 0 ],
         text = command[ 'title' ] )
 
-    return None
+    return super( JavaCompleter, self ).HandleServerCommand( request_data,
+                                                             command )
