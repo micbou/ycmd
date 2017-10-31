@@ -52,7 +52,7 @@ Next, install the language specific dependencies you need:
 - `sudo apt install golang-go` for Go.
 - `sudo apt install npm` for JavaScript and TypeScript.
 - `sudo apt install mono-devel` for C#.
-- Concerning Rust, install Cargo and rustc with [rustup](https://www.rustup.rs/).
+- [rustup](https://www.rustup.rs/) for Rust.
 
 When you first clone the repository you'll need to update the submodules:
 ```
@@ -93,8 +93,8 @@ completer that provides semantic completion for C-family languages.  There's
 also a Jedi-based completer for semantic completion for Python, an
 OmniSharp-based completer for C#, a [Gocode][gocode]-based completer for Go
 (using [Godef][godef] for jumping to definitions), a TSServer-based completer
-for TypeScript and a [jdt.ls][jdtls]-based server for Java. More will be added
-with time.
+for TypeScript, a [jdt.ls][jdtls]-based completer for Java, and a
+[RLS][rls]-based completer for Rust. More will be added with time.
 
 There are also other completion engines, like the filepath completer (part of
 the identifier completer).
@@ -345,3 +345,4 @@ This software is licensed under the [GPL v3 license][gpl].
 [nano-ycmd]: https://github.com/orsonteodoro/nano-ycmd
 [jdtls]: https://github.com/eclipse/eclipse.jdt.ls
 [api-docs]: https://valloric.github.io/ycmd/
+[rls]: https://github.com/rust-lang-nursery/rls

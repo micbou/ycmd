@@ -1,4 +1,4 @@
-# Copyright (C) 2017 ycmd contributors
+# Copyright (C) 2017-2018 ycmd contributors
 #
 # This file is part of ycmd.
 #
@@ -466,19 +466,26 @@ class LanguageServerConnection( threading.Thread ):
     for notifications (unsolicited messages from the server), simply accumulates
     them in a Queue which is polled by the long-polling mechanism in
     LanguageServerCompleter."""
-    if 'id' in message:
-      with self._response_mutex:
-        message_id = str( message[ 'id' ] )
-        assert message_id in self._responses
-        self._responses[ message_id ].ResponseReceived( message )
-        del self._responses[ message_id ]
-    else:
+    if 'method' in message:
+      if 'id' in message:
+        # We received a request. Ignore it.
+        return
+
+      # We received a notification.
       self._AddNotificationToQueue( message )
 
       # If there is an immediate (in-message-pump-thread) handler configured,
       # call it.
       if self._notification_handler:
         self._notification_handler( self, message )
+
+      return
+
+    # We received a response.
+    with self._response_mutex:
+      message_id = str( message[ 'id' ] )
+      self._responses[ message_id ].ResponseReceived( message )
+      del self._responses[ message_id  ]
 
 
   def _AddNotificationToQueue( self, message ):
@@ -1410,8 +1417,11 @@ class LanguageServerCompleter( Completer ):
       lsp.Rename( request_id, request_data, new_name ),
       REQUEST_TIMEOUT_COMMAND )
 
-    return responses.BuildFixItResponse(
-      [ WorkspaceEditToFixIt( request_data, response[ 'result' ] ) ] )
+    fixit = WorkspaceEditToFixIt( request_data, response[ 'result' ] )
+    if not fixit:
+      raise RuntimeError( 'Cannot rename under cursor.' )
+
+    return responses.BuildFixItResponse( [ fixit ] )
 
 
   def Format( self, request_data ):

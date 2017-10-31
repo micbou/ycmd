@@ -313,8 +313,6 @@ def ParseArguments():
                        help = 'Enable C# semantic completion engine.' )
   parser.add_argument( '--go-completer', action = 'store_true',
                        help = 'Enable Go semantic completion engine.' )
-  parser.add_argument( '--rust-completer', action = 'store_true',
-                       help = 'Enable Rust semantic completion engine.' )
   parser.add_argument( '--js-completer', action = 'store_true',
                        help = 'Enable JavaScript semantic completion engine.' ),
   parser.add_argument( '--java-completer', action = 'store_true',
@@ -358,8 +356,10 @@ def ParseArguments():
                        help = argparse.SUPPRESS )
   parser.add_argument( '--racer-completer', action = 'store_true',
                        help = argparse.SUPPRESS )
+  parser.add_argument( '--rust-completer', action = 'store_true',
+                       help = argparse.SUPPRESS )
   parser.add_argument( '--tern-completer', action = 'store_true',
-                       help = argparse.SUPPRESS ),
+                       help = argparse.SUPPRESS )
 
   args = parser.parse_args()
 
@@ -555,24 +555,6 @@ def EnableGoCompleter( args ):
              status_message = 'Building godef for go definition' )
 
 
-def EnableRustCompleter( args ):
-  """
-  Build racerd. This requires a reasonably new version of rustc/cargo.
-  """
-  cargo = FindExecutableOrDie( 'cargo',
-                               'cargo is required for the Rust completer.' )
-
-  os.chdir( p.join( DIR_OF_THIRD_PARTY, 'racerd' ) )
-  command_line = [ cargo, 'build' ]
-  # We don't use the --release flag on CI services because it makes building
-  # racerd 2.5x slower and we don't care about the speed of the produced racerd.
-  if not OnCiService():
-    command_line.append( '--release' )
-  CheckCall( command_line,
-             quiet = args.quiet,
-             status_message = 'Building racerd for Rust completion' )
-
-
 def EnableJavaScriptCompleter( args ):
   # On Debian-based distributions, node is by default installed as nodejs.
   node = PathToFirstExistingExecutable( [ 'nodejs', 'node' ] )
@@ -682,8 +664,6 @@ def Main():
     EnableGoCompleter( args )
   if args.js_completer or args.tern_completer or args.all_completers:
     EnableJavaScriptCompleter( args )
-  if args.rust_completer or args.racer_completer or args.all_completers:
-    EnableRustCompleter( args )
   if args.java_completer or args.all_completers:
     EnableJavaCompleter( args )
 

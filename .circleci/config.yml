@@ -22,19 +22,20 @@ aliases:
   # Increase the version key to clear the cache.
   save-cache: &save-cache
     save_cache:
-      key: v3-ycmd-{{ .Environment.CIRCLE_JOB }}
+      # TODO: remove "test"
+      key: v4-test-ycmd-{{ .Environment.CIRCLE_JOB }}
       paths:
         - ~/Library/Caches/Homebrew
         - ~/.cache/pip
         - ~/.npm
-        - ~/.cargo
+        - ~/.rustup
         - ~/.pyenv
         - clang_archives
-        - third_party/racerd/target
         - third_party/eclipse.jdt.ls/target/cache
   restore-cache: &restore-cache
+    # TODO: remove "test"
     restore_cache:
-      key: v3-ycmd-{{ .Environment.CIRCLE_JOB }}
+      key: v4-test-ycmd-{{ .Environment.CIRCLE_JOB }}
 jobs:
   python3:
     <<: *common

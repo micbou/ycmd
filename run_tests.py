@@ -68,9 +68,9 @@ COMPLETERS = {
     'aliases': [ 'gocode' ]
   },
   'rust': {
-    'build': [ '--rust-completer' ],
+    'build': [],
     'test': [ '--exclude-dir=ycmd/tests/rust' ],
-    'aliases': [ 'racer', 'racerd', ]
+    'aliases': []
   },
   'typescript': {
     'build': [],
