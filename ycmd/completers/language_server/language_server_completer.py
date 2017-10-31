@@ -1742,8 +1742,11 @@ class LanguageServerCompleter( Completer ):
       lsp.Rename( request_id, request_data, new_name ),
       REQUEST_TIMEOUT_COMMAND )
 
-    return responses.BuildFixItResponse(
-      [ WorkspaceEditToFixIt( request_data, response[ 'result' ] ) ] )
+    fixit = WorkspaceEditToFixIt( request_data, response[ 'result' ] )
+    if not fixit:
+      raise RuntimeError( 'Cannot rename under cursor.' )
+
+    return responses.BuildFixItResponse( [ fixit ] )
 
 
   def Format( self, request_data ):
@@ -1815,12 +1818,15 @@ def _CompletionItemToCompletionData( insertion_text, item, fixits ):
     kind = lsp.ITEM_KIND[ item.get( 'kind' ) or 0 ]
   except IndexError:
     kind = lsp.ITEM_KIND[ 0 ] # Fallback to None for unsupported kinds.
+
+  documentation = item.get( 'documentation' ) or ''
+  if isinstance( documentation, dict ):
+    documentation = documentation[ 'value' ]
+
   return responses.BuildCompletionData(
     insertion_text,
     extra_menu_info = item.get( 'detail' ),
-    detailed_info = ( item[ 'label' ] +
-                      '\n\n' +
-                      ( item.get( 'documentation' ) or '' ) ),
+    detailed_info = item[ 'label' ] + '\n\n' + documentation,
     menu_text = item[ 'label' ],
     kind = kind,
     extra_data = fixits )

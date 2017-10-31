@@ -94,7 +94,7 @@ COMPLETERS = {
   'rust': {
     'build': [ '--rust-completer' ],
     'test': [ '--exclude-dir=ycmd/tests/rust' ],
-    'aliases': [ 'racer', 'racerd', ]
+    'aliases': []
   },
   'typescript': {
     'build': [ '--ts-completer' ],
