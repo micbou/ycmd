@@ -60,6 +60,10 @@ class MockCompleter( lsc.LanguageServerCompleter, DummyCompleter ):
     super( MockCompleter, self ).__init__( user_options )
 
 
+  def StartServer( self, request_data, **kwargs ):
+    pass
+
+
   def GetConnection( self ):
     return self._connection
 
