@@ -373,6 +373,21 @@ def RunYcmdBenchmarks( build_dir ):
   CheckCall( p.join( benchmarks_dir, 'ycm_core_benchmarks' ), env = new_env )
 
 
+def CheckYcmdMemoryUsage( build_dir ):
+  memory_dir = p.join( build_dir, 'ycm', 'memory' )
+  new_env = os.environ.copy()
+
+  if OnWindows():
+    # We prepend the folder of the ycm_core_memory executable to the PATH
+    # instead of overwriting it so that the executable is able to find the
+    # Python library.
+    new_env[ 'PATH' ] = DIR_OF_THIS_SCRIPT + ';' + new_env[ 'PATH' ]
+  else:
+    new_env[ 'LD_LIBRARY_PATH' ] = DIR_OF_THIS_SCRIPT
+
+  CheckCall( p.join( memory_dir, 'ycm_core_memory' ), env = new_env )
+
+
 # On Windows, if the ycmd library is in use while building it, a LNK1104
 # fatal error will occur during linking. Exit the script early with an
 # error message if this is the case.
@@ -425,6 +440,8 @@ def BuildYcmdLib( args ):
       build_targets.append( 'ycm_core_tests' )
     if 'YCM_BENCHMARK' in os.environ:
       build_targets.append( 'ycm_core_benchmarks' )
+    if 'YCM_MEMORY' in os.environ:
+      build_targets.append( 'ycm_core_memory' )
 
     if OnWindows():
       config = 'Debug' if args.enable_debug else 'Release'
@@ -441,6 +458,8 @@ def BuildYcmdLib( args ):
       RunYcmdTests( build_dir )
     if 'YCM_BENCHMARK' in os.environ:
       RunYcmdBenchmarks( build_dir )
+    if 'YCM_MEMORY' in os.environ:
+      CheckYcmdMemoryUsage( build_dir )
   finally:
     os.chdir( DIR_OF_THIS_SCRIPT )
 
