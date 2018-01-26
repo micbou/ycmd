@@ -53,13 +53,7 @@ class Shutdown_test( Client_test ):
   def FromHandlerWithSubservers_test( self ):
     self.Start()
 
-    filetypes = [ 'cs',
-                  'go',
-                  'java',
-                  'javascript',
-                  'python',
-                  'typescript',
-                  'rust' ]
+    filetypes = [ 'java' ]
     for filetype in filetypes:
       self.StartSubserverForFiletype( filetype )
     self.AssertServersAreRunning()
@@ -84,13 +78,7 @@ class Shutdown_test( Client_test ):
   def FromWatchdogWithSubservers_test( self ):
     self.Start( idle_suicide_seconds = 5, check_interval_seconds = 1 )
 
-    filetypes = [ 'cs',
-                  'go',
-                  'java',
-                  'javascript',
-                  'python',
-                  'typescript',
-                  'rust' ]
+    filetypes = [ 'java' ]
     for filetype in filetypes:
       self.StartSubserverForFiletype( filetype )
     self.AssertServersAreRunning()
