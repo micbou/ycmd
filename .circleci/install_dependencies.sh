@@ -15,10 +15,6 @@ brew update || brew update
 # We require CMake, Node, Go, Mono and Ninja for our build and tests, and all
 # the others are dependencies of pyenv.
 REQUIREMENTS="cmake
-              node.js
-              go
-              mono
-              ninja
               readline
               autoconf
               pkg-config
@@ -83,26 +79,6 @@ pip install -r test_requirements.txt
 # http://coverage.readthedocs.io/en/latest/subprocess.html
 echo -e "import coverage\ncoverage.process_startup()" > \
   ${PYENV_ROOT}/versions/${PYENV_VERSION}/lib/python${YCMD_PYTHON_VERSION}/site-packages/sitecustomize.py
-
-############
-# Rust setup
-############
-
-curl https://sh.rustup.rs -sSf | sh -s -- -y
-
-CARGO_PATH="${HOME}/.cargo/bin"
-PATH="${CARGO_PATH}:${PATH}"
-rustup update
-rustc -Vv
-cargo -V
-
-echo "export PATH=${CARGO_PATH}:\$PATH" >> $BASH_ENV
-
-##################
-# TypeScript setup
-##################
-
-npm install -g typescript
 
 #################
 # Java 8 setup

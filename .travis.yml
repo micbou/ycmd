@@ -8,20 +8,16 @@ install:
   - source ci/travis/travis_install.sh
 script:
   - ci/travis/travis_script.sh
-after_success:
-  - if [ "${COVERAGE}" == "true" ]; then bash <(curl -s https://codecov.io/bash); fi
 env:
   global:
     # Travis can run out of RAM, so we need to be careful here.
     - YCM_CORES=3
-    - COVERAGE=true
-    - USE_CLANG_COMPLETER=true
   matrix:
-    - YCMD_PYTHON_VERSION=2.7 USE_CLANG_COMPLETER=false
-    - YCMD_PYTHON_VERSION=2.7
-    - YCMD_PYTHON_VERSION=3.4
-    - YCMD_PYTHON_VERSION=3.4 YCM_COMPILER=clang
-    - YCMD_PYTHON_VERSION=3.4 YCM_BENCHMARK=true COVERAGE=false
+    - YCMD_PYTHON_VERSION=3.4 YCMD_BUILD=1
+    - YCMD_PYTHON_VERSION=3.4 YCMD_BUILD=2
+    - YCMD_PYTHON_VERSION=3.4 YCMD_BUILD=3
+    - YCMD_PYTHON_VERSION=3.4 YCMD_BUILD=4
+    - YCMD_PYTHON_VERSION=3.4 YCMD_BUILD=5
 addons:
   # If this doesn't make much sense to you, see the travis docs:
   #    https://docs.travis-ci.com/user/migrating-from-legacy/
