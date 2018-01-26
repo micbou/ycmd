@@ -14,7 +14,7 @@ aliases:
   run-tests: &run-tests
     run:
       name: Run tests
-      command: ./run_tests.py --coverage
+      command: ./run_tests.py --no-flake8 --runs 20 --completers java -- ycmd/tests/java
   upload-coverage: &upload-coverage
     run:
       name: Upload coverage
@@ -36,18 +36,6 @@ aliases:
     restore_cache:
       key: v3-ycmd-{{ .Environment.CIRCLE_JOB }}
 jobs:
-  python2:
-    <<: *common
-    steps:
-      - checkout
-      - *update-submodules
-      - *restore-cache
-      - *install-dependencies
-      - *run-tests
-      - *save-cache
-      - *upload-coverage
-    environment:
-      YCMD_PYTHON_VERSION: 2.7
   python3:
     <<: *common
     steps:
@@ -60,23 +48,8 @@ jobs:
       - *upload-coverage
     environment:
       YCMD_PYTHON_VERSION: 3.4
-  benchmark:
-    <<: *common
-    steps:
-      - checkout
-      - *update-submodules
-      - *restore-cache
-      - *install-dependencies
-      - run:
-          name: Benchmark
-          command: ./benchmark.py
-      - *save-cache
-    environment:
-      YCMD_PYTHON_VERSION: 3.4
 workflows:
   version: 2
   build:
     jobs:
-      - python2
       - python3
-      - benchmark

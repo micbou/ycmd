@@ -1,5 +1,1 @@
-if [ "${YCM_BENCHMARK}" == "true" ]; then
-  ./benchmark.py
-else
-  ./run_tests.py
-fi
+./run_tests.py --no-flake8 --runs 20 --completers java -- ycmd/tests/java

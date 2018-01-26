@@ -39,27 +39,6 @@ if %errorlevel% neq 0 exit /b %errorlevel%
 python -c "with open('%python_path%\Lib\site-packages\sitecustomize.py', 'w') as f: f.write('import coverage\ncoverage.process_startup()')"
 
 ::
-:: Typescript configuration
-::
-
-:: Since npm executable is a batch file, we need to prefix it with a call
-:: statement. See https://github.com/npm/npm/issues/2938
-call npm install -g typescript
-if %errorlevel% neq 0 exit /b %errorlevel%
-
-::
-:: Rust configuration
-::
-
-appveyor DownloadFile https://static.rust-lang.org/rustup/dist/i686-pc-windows-gnu/rustup-init.exe
-rustup-init.exe -y
-
-set PATH=%USERPROFILE%\.cargo\bin;%PATH%
-rustup update
-rustc -Vv
-cargo -V
-
-::
 :: Java Configuration (Java 8 required for jdt.ls)
 ::
 if %arch% == 32 (
