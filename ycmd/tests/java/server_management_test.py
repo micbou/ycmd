@@ -226,7 +226,7 @@ def ServerManagement_CloseServer_Unclean_test( app, stop_server_cleanly ):
                  ) )
                ) )
 
-  process.wait( timeout = 10 )
+  #process.wait( timeout = 10 )
 
 
 @IsolatedYcmd
