@@ -1,7 +1,7 @@
 version: '{build}'
 environment:
-  USE_CLANG_COMPLETER: true
-  COVERAGE: true
+  USE_CLANG_COMPLETER: false
+  COVERAGE: false
   matrix:
   - APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2017
     arch: 64

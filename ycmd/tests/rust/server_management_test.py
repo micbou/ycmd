@@ -24,8 +24,6 @@ from builtins import *  # noqa
 
 import psutil
 import requests
-import time
-import threading
 
 from mock import patch
 from hamcrest import assert_that, contains, has_entry, starts_with
@@ -37,7 +35,7 @@ from ycmd.tests.test_utils import ( BuildRequest,
                                     PollForMessages,
                                     StartCompleterServer,
                                     WaitUntilCompleterServerReady )
-from ycmd import handlers, utils
+from ycmd import utils
 from ycmd.utils import FindExecutable
 from ycmd.completers.rust.rust_completer import _GetCommandOutput, TOOLCHAIN
 
@@ -337,7 +335,7 @@ def ServerManagement_StartServer_CannotParseVersions_test( app, *args ):
 
 
 @IsolatedYcmd
-def ServerManagement_StartServerTwice_test( app ):
+def ServerManagement_StartServer_AlreadyStarting_test( app ):
   filepath = PathToTestFile( 'common', 'src', 'main.rs' )
 
   StartCompleterServer( app, 'rust', filepath )
@@ -356,6 +354,22 @@ def ServerManagement_StartServerTwice_test( app ):
                                             'Already starting server.' ) )
 
   WaitUntilCompleterServerReady( app, 'rust' )
+
+  AssertRustCompleterServerIsRunning( app, True )
+
+
+@IsolatedYcmd
+def ServerManagement_StartServer_AlreadyStarted_test( app ):
+  filepath = PathToTestFile( 'common', 'src', 'main.rs' )
+  StartRustCompleterServerInDirectory( app, filepath )
+
+  AssertRustCompleterServerIsRunning( app, True )
+
+  response = app.post_json( '/event_notification',
+    BuildRequest( filepath = filepath,
+                  event_name = 'FileReadyToParse',
+                  filetype = 'rust' ) )
+  assert_that( response.status_code, requests.codes.ok )
 
   AssertRustCompleterServerIsRunning( app, True )
 
@@ -383,24 +397,30 @@ def ServerManagement_RestartServer_test( app ):
 
 @IsolatedYcmd
 @patch( 'ycmd.utils.WaitUntilProcessIsTerminated', side_effect = RuntimeError )
-def ServerManagement_CloseServer_Unclean_test( app, stop_server_cleanly ):
+def ServerManagement_StopServer_Unclean_test( app, *args ):
   StartRustCompleterServerInDirectory( app, PathToTestFile( 'common', 'src' ) )
 
-  app.post_json(
-    '/run_completer_command',
-    BuildRequest(
-      filetype = 'rust',
-      command_arguments = [ 'StopServer' ],
-    ),
-  )
+  request_data = BuildRequest( filetype = 'rust' )
+  debug_info = app.post_json( '/debug_info', request_data ).json
+  pid = debug_info[ 'completer' ][ 'servers' ][ 0 ][ 'pid' ]
+  process = psutil.Process( pid )
 
-  AssertRustCompleterServerIsRunning( app, False )
+  try:
+    app.post_json(
+      '/run_completer_command',
+      BuildRequest(
+        filetype = 'rust',
+        command_arguments = [ 'StopServer' ],
+      ),
+    )
 
-  # TODO: should we wait for the process to shutdown?
+    AssertRustCompleterServerIsRunning( app, False )
+  finally:
+    process.wait( timeout = 30 )
 
 
 @IsolatedYcmd
-def ServerManagement_StopServerTwice_test( app ):
+def ServerManagement_StopServer_AlreadyStopped_test( app ):
   StartRustCompleterServerInDirectory( app, PathToTestFile( 'common', 'src' ) )
 
   app.post_json(
@@ -423,98 +443,3 @@ def ServerManagement_StopServerTwice_test( app ):
   )
 
   AssertRustCompleterServerIsRunning( app, False )
-
-
-@IsolatedYcmd
-def ServerManagement_ServerDies_test( app ):
-  StartRustCompleterServerInDirectory( app, PathToTestFile( 'common', 'src' ) )
-
-  request_data = BuildRequest( filetype = 'rust' )
-  debug_info = app.post_json( '/debug_info', request_data ).json
-  print( 'Debug info: {0}'.format( debug_info ) )
-  pid = debug_info[ 'completer' ][ 'servers' ][ 0 ][ 'pid' ]
-  print( 'pid: {0}'.format( pid ) )
-  process = psutil.Process( pid )
-  process.terminate()
-
-  for tries in range( 0, 10 ):
-    request_data = BuildRequest( filetype = 'rust' )
-    debug_info = app.post_json( '/debug_info', request_data ).json
-    if not debug_info[ 'completer' ][ 'servers' ][ 0 ][ 'is_running' ]:
-      break
-
-    time.sleep( 0.5 )
-
-  AssertRustCompleterServerIsRunning( app, False )
-
-
-@IsolatedYcmd
-def ServerManagement_ServerDiesWhileShuttingDown_test( app ):
-  StartRustCompleterServerInDirectory( app, PathToTestFile( 'common', 'src' ) )
-
-  request_data = BuildRequest( filetype = 'rust' )
-  debug_info = app.post_json( '/debug_info', request_data ).json
-  print( 'Debug info: {0}'.format( debug_info ) )
-  pid = debug_info[ 'completer' ][ 'servers' ][ 0 ][ 'pid' ]
-  print( 'pid: {0}'.format( pid ) )
-  process = psutil.Process( pid )
-
-
-  def StopServerInAnotherThread():
-    app.post_json(
-      '/run_completer_command',
-      BuildRequest(
-        filetype = 'rust',
-        command_arguments = [ 'StopServer' ],
-      ),
-    )
-
-  completer = handlers._server_state.GetFiletypeCompleter( [ 'rust' ] )
-
-  # In this test we mock out the sending method so that we don't actually send
-  # the shutdown request. We then assisted-suicide the downstream server, which
-  # causes the shutdown request to be aborted. This is interpreted by the
-  # shutdown code as a successful shutdown. We need to do the shutdown and
-  # terminate in parallel as the post_json is a blocking call.
-  with patch.object( completer.GetConnection(), 'WriteData' ):
-    stop_server_task = threading.Thread( target=StopServerInAnotherThread )
-    stop_server_task.start()
-    process.terminate()
-    stop_server_task.join()
-
-  AssertRustCompleterServerIsRunning( app, False )
-
-
-@IsolatedYcmd
-def ServerManagement_ConnectionRaisesWhileShuttingDown_test( app ):
-  StartRustCompleterServerInDirectory( app, PathToTestFile( 'common', 'src' ) )
-
-  request_data = BuildRequest( filetype = 'rust' )
-  debug_info = app.post_json( '/debug_info', request_data ).json
-  print( 'Debug info: {0}'.format( debug_info ) )
-  pid = debug_info[ 'completer' ][ 'servers' ][ 0 ][ 'pid' ]
-  print( 'pid: {0}'.format( pid ) )
-  process = psutil.Process( pid )
-
-  completer = handlers._server_state.GetFiletypeCompleter( [ 'rust' ] )
-
-  # In this test we mock out the GetResponse method, which is used to send the
-  # shutdown request. This means we only send the exit notification. It's
-  # possible that the server won't like this, but it seems reasonable for it to
-  # actually exit at that point.
-  with patch.object( completer.GetConnection(),
-                     'GetResponse',
-                     side_effect = RuntimeError ):
-    app.post_json(
-      '/run_completer_command',
-      BuildRequest(
-        filetype = 'rust',
-        command_arguments = [ 'StopServer' ],
-      ),
-    )
-
-  AssertRustCompleterServerIsRunning( app, False )
-
-  if process.is_running():
-    process.terminate()
-    raise AssertionError( 'RLS process is still running after exit handler' )

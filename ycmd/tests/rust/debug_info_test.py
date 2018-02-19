@@ -46,7 +46,7 @@ def DebugInfo_test( app ):
         'logfiles': contains( instance_of( str ) ),
         'extras': contains(
           has_entries( {
-            'key': 'status',
+            'key': 'build status',
             'value': instance_of( str )
           } ), has_entries( {
             'key': 'version',

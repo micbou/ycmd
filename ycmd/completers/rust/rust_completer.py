@@ -35,14 +35,16 @@ from collections import deque
 
 _logger = logging.getLogger( __name__ )
 
-LOGFILE_FORMAT = 'rls_'
 TOOLCHAIN_CHANNEL = 'nightly'
 TOOLCHAIN_DATE = '2018-02-15'
 TOOLCHAIN = '{channel}-{date}'.format( channel = TOOLCHAIN_CHANNEL,
                                        date = TOOLCHAIN_DATE )
 RUSTUP_TOOLCHAIN_REGEX = re.compile( r'^(?P<toolchain>[\w-]+)' )
 RUSTUP_VERSION = re.compile( r'^rustup (?P<version>.*)$' )
+
+RLS_LOGFILE_FORMAT = 'rls_'
 RLS_VERSION = re.compile( r'^rls-preview (?P<version>.*)$' )
+RLS_BUILDING_TIMEOUT = 5
 
 
 def _GetCommandOutput( command ):
@@ -65,7 +67,8 @@ class RustCompleter( language_server_completer.LanguageServerCompleter ):
     self._server_handle = None
     self._server_logfile = None
     self._server_started = False
-    self._server_status = None
+    self._server_not_building = threading.Event()
+    self._server_not_building.set()
 
     self._toolchain = None
     self._rustup = None
@@ -148,8 +151,8 @@ class RustCompleter( language_server_completer.LanguageServerCompleter ):
     for line in toolchains.splitlines():
       match = RUSTUP_TOOLCHAIN_REGEX.search( line )
       if not match:
-        _logger.error( "Cannot parse '{line}' as a toolchain "
-                       "in rustup output.".format( line = line ) )
+        _logger.error( "Cannot parse '%s' as a toolchain in rustup output.",
+                       line )
         continue
 
       toolchain = match.group( 'toolchain' )
@@ -250,6 +253,8 @@ class RustCompleter( language_server_completer.LanguageServerCompleter ):
 
 
   def DebugInfo( self, request_data ):
+    status = 'done' if self._server_not_building.is_set() else 'working'
+
     return responses.BuildDebugInfoResponse(
       name = 'Rust',
       servers = [
@@ -261,7 +266,7 @@ class RustCompleter( language_server_completer.LanguageServerCompleter ):
             self._server_logfile
           ],
           extras = [
-            responses.DebugInfoItem( 'status', self._server_status ),
+            responses.DebugInfoItem( 'build status', status ),
             responses.DebugInfoItem( 'version', self._rls_version ),
           ]
         )
@@ -323,7 +328,7 @@ class RustCompleter( language_server_completer.LanguageServerCompleter ):
 
       _logger.info( 'Starting Rust Language Server...' )
 
-      self._server_logfile = utils.CreateLogfile( LOGFILE_FORMAT )
+      self._server_logfile = utils.CreateLogfile( RLS_LOGFILE_FORMAT )
 
       env = os.environ.copy()
       if _logger.isEnabledFor( logging.DEBUG ):
@@ -342,12 +347,6 @@ class RustCompleter( language_server_completer.LanguageServerCompleter ):
                                                stderr = stderr,
                                                env = env )
 
-      if not self._ServerIsRunning():
-        self._Notify( 'Rust Language Server failed to start.' )
-        return
-
-      _logger.info( 'Rust Language Server started.' )
-
       self._connection = (
         language_server_completer.StandardIOLanguageServerConnection(
           self._server_handle.stdin,
@@ -365,6 +364,8 @@ class RustCompleter( language_server_completer.LanguageServerCompleter ):
         self._StopServer()
         return
 
+      _logger.info( 'Rust Language Server started.' )
+
       self.SendInitialize( request_data )
     finally:
       self._server_starting.clear()
@@ -373,13 +374,11 @@ class RustCompleter( language_server_completer.LanguageServerCompleter ):
   def _StopServer( self ):
     with self._server_state_mutex:
       _logger.info( 'Shutting down Rust Language Server...' )
-      # We don't use utils.CloseStandardStreams, because the stdin/out is
-      # connected to our server connector. Just close stderr.
-      #
-      # The other streams are closed by the LanguageServerConnection when we
-      # call Close.
-      if self._server_handle and self._server_handle.stderr:
-        self._server_handle.stderr.close()
+
+      # FIXME: RLS may leave child processes orphan if a shutdown request is
+      # sent while a build is in progress. Make sure no build is running.
+      if self._ServerIsRunning():
+        self._server_not_building.wait( RLS_BUILDING_TIMEOUT )
 
       # Tell the connection to expect the server to disconnect.
       if self._connection:
@@ -390,8 +389,8 @@ class RustCompleter( language_server_completer.LanguageServerCompleter ):
         self._CleanUp()
         return
 
-      _logger.info( 'Stopping Rust Language Server with PID {0}'.format(
-         self._server_handle.pid ) )
+      _logger.info( 'Stopping Rust Language Server with PID %s',
+                    self._server_handle.pid )
 
       try:
         self.ShutdownServer()
@@ -423,7 +422,7 @@ class RustCompleter( language_server_completer.LanguageServerCompleter ):
   def _CleanUp( self ):
     self._server_handle = None
     self._server_started = False
-    self._server_status = None
+    self._server_not_building.set()
     self._connection = None
     self.ServerReset()
     if not self._server_keep_logfiles:
@@ -445,11 +444,11 @@ class RustCompleter( language_server_completer.LanguageServerCompleter ):
     # should notify the client about it through a special status/progress
     # message.
     if notification[ 'method' ] == 'rustDocument/beginBuild':
-      self._server_status = 'building'
+      self._server_not_building.clear()
       return
 
     if notification[ 'method' ] == 'rustDocument/diagnosticsEnd':
-      self._server_status = 'ready'
+      self._server_not_building.set()
       return
 
     super( RustCompleter, self ).HandleNotificationInPollThread( notification )

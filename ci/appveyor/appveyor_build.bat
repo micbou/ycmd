@@ -1,1 +1,1 @@
-python run_tests.py --no-flake8 --runs 40 --completers rust -- ycmd\tests\rust
+python run_tests.py --logging-format="%%(asctime)s - %%(levelname)s - %%(message)s" --runs 100 --completers rust -- ycmd\tests\rust
