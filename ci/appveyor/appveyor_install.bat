@@ -28,6 +28,18 @@ if %errorlevel% neq 0 exit /b %errorlevel%
 python -c "with open('%python_path%\Lib\site-packages\sitecustomize.py', 'w') as f: f.write('import coverage\ncoverage.process_startup()')"
 
 ::
+:: Rust configuration
+::
+
+appveyor DownloadFile https://static.rust-lang.org/rustup/dist/i686-pc-windows-gnu/rustup-init.exe
+rustup-init.exe -y
+
+set PATH=%USERPROFILE%\.cargo\bin;%PATH%
+rustup update
+rustc -Vv
+cargo -V
+
+::
 :: Java Configuration (Java 8 required for jdt.ls)
 ::
 if %arch% == 32 (

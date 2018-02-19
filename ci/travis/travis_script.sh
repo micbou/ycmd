@@ -1,1 +1,1 @@
-./run_tests.py --no-flake8 --runs 20 --completers java -- ycmd/tests/java
+./run_tests.py --no-flake8 --runs 40 --completers rust -- ycmd/tests/rust

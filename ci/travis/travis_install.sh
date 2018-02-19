@@ -78,6 +78,17 @@ pip install -r test_requirements.txt
 echo -e "import coverage\ncoverage.process_startup()" > \
   ${PYENV_ROOT}/versions/${PYENV_VERSION}/lib/python${YCMD_PYTHON_VERSION}/site-packages/sitecustomize.py
 
+############
+# Rust setup
+############
+
+curl https://sh.rustup.rs -sSf | sh -s -- -y
+
+export PATH="${HOME}/.cargo/bin:${PATH}"
+rustup update
+rustc -Vv
+cargo -V
+
 ###############
 # Java 8 setup
 ###############
