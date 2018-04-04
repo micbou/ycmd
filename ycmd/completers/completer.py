@@ -23,6 +23,7 @@ from __future__ import absolute_import
 from builtins import *  # noqa
 
 import abc
+import collections
 import threading
 from ycmd.completers import completer_utils
 from ycmd.responses import NoDiagnosticSupport
@@ -176,6 +177,9 @@ class Completer( with_metaclass( abc.ABCMeta, object ) ):
         if user_options[ 'auto_trigger' ] else None )
     self._completions_cache = CompletionsCache()
     self._max_candidates = user_options[ 'max_num_candidates' ]
+    self._completion_chain_lock = threading.Lock()
+    self._latest_request_data = None
+    self._completion_chain = self.ComputeCandidatesInner
 
 
   # It's highly likely you DON'T want to override this function but the *Inner
@@ -224,22 +228,33 @@ class Completer( with_metaclass( abc.ABCMeta, object ) ):
   def ComputeCandidates( self, request_data ):
     if ( not request_data[ 'force_semantic' ] and
          not self.ShouldUseNow( request_data ) ):
-      return []
+      return [], True
 
-    candidates = self._GetCandidatesFromSubclass( request_data )
-    return self.FilterAndSortCandidates( candidates, request_data[ 'query' ] )
+    candidates, complete = self._GetCandidatesFromSubclass( request_data )
+    return (
+      self.FilterAndSortCandidates( candidates, request_data[ 'query' ] ),
+      complete )
 
 
   def _GetCandidatesFromSubclass( self, request_data ):
     cache_completions = self._completions_cache.GetCompletionsIfCacheValid(
       request_data )
-
     if cache_completions:
-      return cache_completions
+      return cache_completions, True
 
-    raw_completions = self.ComputeCandidatesInner( request_data )
-    self._completions_cache.Update( request_data, raw_completions )
-    return raw_completions
+    with self._completion_chain_lock:
+      if not ( self._latest_request_data and
+               request_data == self._latest_request_data ):
+        self._completion_chain = self.ComputeCandidatesInner
+        self._latest_request_data = request_data
+
+      raw_completions, self._completion_chain = self._completion_chain(
+        request_data )
+      complete = self._completion_chain == self.ComputeCandidatesInner
+
+    if complete:
+      self._completions_cache.Update( request_data, raw_completions )
+    return raw_completions, complete
 
 
   def ComputeCandidatesInner( self, request_data ):

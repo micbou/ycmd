@@ -385,14 +385,19 @@ class TypeScriptCompleter( Completer ):
       'offset': request_data[ 'start_codepoint' ]
     } )
 
+    return ( [ _ConvertCompletionData( entry ) for entry in entries ],
+             partial( self._GetDetailedCompletions, entries ) )
+
+
+  def _GetDetailedCompletions( self, entries, request_data ):
     detailed_entries = self._SendRequest( 'completionEntryDetails', {
       'file':       request_data[ 'filepath' ],
       'line':       request_data[ 'line_num' ],
       'offset':     request_data[ 'start_codepoint' ],
-      'entryNames': [ entry[ 'name' ] for entry in entries ]
+      'entryNames': entries
     } )
     return [ _ConvertDetailedCompletionData( entry )
-             for entry in detailed_entries ]
+             for entry in detailed_entries ], self.ComputeCandidatesInner
 
 
   def GetSubcommandsMap( self ):
@@ -843,6 +848,13 @@ class TypeScriptCompleter( Completer ):
 
 def _LogLevel():
   return 'verbose' if _logger.isEnabledFor( logging.DEBUG ) else 'normal'
+
+
+def _ConvertCompletionData( completion_data ):
+  return responses.BuildCompletionData(
+    insertion_text  = completion_data[ 'name' ],
+    kind            = completion_data[ 'kind' ]
+  )
 
 
 def _ConvertDetailedCompletionData( completion_data ):

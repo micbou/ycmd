@@ -95,12 +95,12 @@ def GetCompletions():
 
   errors = None
   completions = None
+  complete = True
 
   if do_filetype_completion:
     try:
-      completions = ( _server_state.GetFiletypeCompleter(
-                                  request_data[ 'filetypes' ] )
-                                 .ComputeCandidates( request_data ) )
+      completions, complete = _server_state.GetFiletypeCompleter(
+        request_data[ 'filetypes' ] ).ComputeCandidates( request_data )
 
     except Exception as exception:
       if request_data[ 'force_semantic' ]:
@@ -115,13 +115,14 @@ def GetCompletions():
                       "".join( stack ) )
       errors = [ BuildExceptionResponse( exception, stack ) ]
 
-  if not completions and not request_data[ 'force_semantic' ]:
-    completions = _server_state.GetGeneralCompleter().ComputeCandidates(
-      request_data )
+  if complete and not completions and not request_data[ 'force_semantic' ]:
+    completions, complete = _server_state.GetGeneralCompleter(
+      ).ComputeCandidates( request_data )
 
   return _JsonResponse(
       BuildCompletionResponse( completions if completions else [],
                                request_data[ 'start_column' ],
+                               complete = complete,
                                errors = errors ) )
 
 

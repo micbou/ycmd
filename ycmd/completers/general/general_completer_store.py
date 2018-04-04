@@ -81,13 +81,13 @@ class GeneralCompleterStore( Completer ):
 
   def ComputeCandidates( self, request_data ):
     if not self.ShouldUseNow( request_data ):
-      return []
+      return [], True
 
     candidates = []
     for completer in self._current_query_completers:
       candidates += completer.ComputeCandidates( request_data )
 
-    return candidates
+    return candidates, True
 
 
   def OnFileReadyToParse( self, request_data ):

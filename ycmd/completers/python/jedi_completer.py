@@ -31,6 +31,7 @@ from ycmd import responses, utils, hmac_utils
 from tempfile import NamedTemporaryFile
 
 from base64 import b64encode
+from functools import partial
 from future.utils import native
 import json
 import logging
@@ -267,12 +268,22 @@ class JediCompleter( Completer ):
 
 
   def ComputeCandidatesInner( self, request_data ):
-    return [ responses.BuildCompletionData(
-                completion[ 'name' ],
-                completion[ 'description' ],
-                completion[ 'docstring' ],
-                extra_data = self._GetExtraData( completion ) )
-             for completion in self._JediCompletions( request_data ) ]
+    completions = [ responses.BuildCompletionData(
+      completion[ 'name' ],
+      completion[ 'description' ],
+      completion[ 'docstring' ],
+      extra_data = self._GetExtraData( completion ) )
+      for completion in self._JediCompletions( request_data ) ]
+
+    return completions[ :1 ], partial( self._GetCompletions, completions, 1 )
+
+
+  def _GetCompletions( self, completions, step, request_data ):
+    if step == len( completions ):
+      return completions, self.ComputeCandidatesInner
+    step = min( len( completions ), step + 1 )
+    return ( completions[ : step ],
+             partial( self._GetCompletions, completions, step ) )
 
 
   def _JediCompletions( self, request_data ):
