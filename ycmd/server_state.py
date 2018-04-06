@@ -135,5 +135,4 @@ class ServerState( object ):
         'filetype_specific_completion_to_disable' ]
     if '*' in filetype_to_disable:
       return False
-    else:
-      return not all([ x in filetype_to_disable for x in current_filetypes ])
+    return not all( [ x in filetype_to_disable for x in current_filetypes ] )
