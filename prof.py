@@ -43,7 +43,10 @@ def Main():
 
   for _ in range( args.runs ):
     profile.enable()
+    import time
+    tic = time.perf_counter()
     Run( candidates )
+    print( time.perf_counter() - tic )
     profile.disable()
 
   stats = pstats.Stats( profile ).sort_stats( 'cumulative' )
