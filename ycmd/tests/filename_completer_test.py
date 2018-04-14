@@ -25,13 +25,15 @@ from __future__ import absolute_import
 from builtins import *  # noqa
 
 import os
-from hamcrest import assert_that, contains_inanyorder, empty
+from hamcrest import assert_that, contains_inanyorder, empty, has_items
 from nose.tools import eq_, ok_
 from ycmd.completers.general.filename_completer import FilenameCompleter
 from ycmd.request_wrap import RequestWrap
 from ycmd import user_options_store
-from ycmd.tests import IsolatedYcmd
-from ycmd.tests.test_utils import BuildRequest, CurrentWorkingDirectory
+from ycmd.tests import IsolatedYcmd, PathToTestFile, SharedYcmd
+from ycmd.tests.test_utils import ( BuildRequest,
+                                    CompletionEntryMatcher,
+                                    CurrentWorkingDirectory )
 from ycmd.utils import GetCurrentDirectory, ToBytes
 
 TEST_DIR = os.path.dirname( os.path.abspath( __file__ ) )
@@ -370,3 +372,16 @@ def WorkingDir_UseClientWorkingDirectory_test( app ):
     ( 'Qt',    '[Dir]' ),
     ( 'QtGui', '[Dir]' )
   ) )
+
+
+@SharedYcmd
+def FilenameCompleter_ForceFilepath_test( app ):
+  filepath = PathToTestFile( DATA_DIR, 'foo' )
+  completion_data = BuildRequest( filepath = filepath,
+                                  contents = '',
+                                  column_num = 1,
+                                  force_filepath = True )
+  results = app.post_json( '/completions',
+                           completion_data ).json[ 'completions' ]
+  assert_that( results,
+               has_items( CompletionEntryMatcher( 'test.cpp', '[File]' ) ) )

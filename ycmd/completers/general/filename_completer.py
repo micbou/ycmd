@@ -77,6 +77,9 @@ class FilenameCompleter( Completer ):
 
 
   def ShouldUseNowInner( self, request_data ):
+    if request_data[ 'force_filepath' ]:
+      return True
+
     current_line = request_data[ 'line_value' ]
     start_codepoint = request_data[ 'start_codepoint' ]
 

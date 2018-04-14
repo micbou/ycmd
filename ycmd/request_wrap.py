@@ -91,6 +91,8 @@ class RequestWrap( object ):
 
       'force_semantic': ( self._GetForceSemantic, None ),
 
+      'force_filepath': ( self._GetForceFilepath, None ),
+
       'lines': ( self._CurrentLines, None )
     }
     self._cached_computed = dict()
@@ -247,6 +249,10 @@ class RequestWrap( object ):
 
   def _GetForceSemantic( self ):
     return bool( self._request.get( 'force_semantic', False ) )
+
+
+  def _GetForceFilepath( self ):
+    return bool( self._request.get( 'force_filepath', False ) )
 
 
 def CompletionStartColumn( line_value, column_num, filetype ):
