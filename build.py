@@ -470,7 +470,8 @@ def RunYcmdBenchmarks( build_dir ):
 
   # Note we don't pass the quiet flag here because the output of the benchmark
   # is the only useful info.
-  CheckCall( p.join( benchmarks_dir, 'ycm_core_benchmarks' ), env = new_env )
+  CheckCall( [ p.join( benchmarks_dir, 'ycm_core_benchmarks' ),
+               '--benchmark_filter=.*ExtractIdentifiers.*' ], env = new_env )
 
 
 # On Windows, if the ycmd library is in use while building it, a LNK1104
