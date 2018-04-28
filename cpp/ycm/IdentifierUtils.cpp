@@ -160,6 +160,55 @@ const std::unordered_map < const char *,
         { "Zephir"              , "zephir"              }
       };
 
+
+// Precompute several properties of an absolute path to efficiently absolutize a
+// serie of paths relatively to that path.
+class BasePath {
+public:
+
+  BasePath( const fs::path &absolute_path )
+    : base_path_( absolute_path ),
+      base_root_name_( absolute_path.root_name() ),
+      base_root_directory_( absolute_path.root_directory() ),
+      base_relative_path_( absolute_path.relative_path() ),
+      base_has_root_name_( absolute_path.has_root_name() ) {
+  }
+
+  // Reimplementation of Boost.Filesystem's absolute function.
+  fs::path Absolutize( const fs::path &path ) {
+    if ( path.empty() ) {
+      return base_path_;
+    }
+
+    fs::path root_name( path.root_name() );
+    bool no_root_directory = path.root_directory().empty();
+
+    if ( !root_name.empty() ) {
+      if ( no_root_directory ) {
+        return root_name / base_root_directory_
+                         / base_relative_path_
+                         / path.relative_path();
+      }
+    } else if ( !no_root_directory ) {
+      if ( base_has_root_name_ ) {
+        return base_root_name_ / path;
+      }
+    } else {
+      return base_path_ / path;
+    }
+
+    return path;
+  }
+
+private:
+
+  fs::path base_path_;
+  fs::path base_root_name_;
+  fs::path base_root_directory_;
+  fs::path base_relative_path_;
+  bool base_has_root_name_;
+};
+
 }  // unnamed namespace
 
 
@@ -180,6 +229,7 @@ FiletypeIdentifierMap ExtractIdentifiersFromTagsFile(
   boost::smatch matches;
   const boost::regex expression( TAG_REGEX );
   const boost::match_flag_type options = boost::match_not_dot_newline;
+  BasePath parent_tag_path( path_to_tag_file.parent_path() );
 
   while ( boost::regex_search( start, end, matches, expression, options ) ) {
     start = matches[ 0 ].second;
@@ -191,10 +241,10 @@ FiletypeIdentifierMap ExtractIdentifiersFromTagsFile(
 
     std::string identifier( matches[ 1 ] );
     fs::path path( matches[ 2 ].str() );
-    path = fs::absolute( path, path_to_tag_file.parent_path() )
-           .make_preferred();
+    path = parent_tag_path.Absolutize( path ).make_preferred();
 
-    filetype_identifier_map[ filetype ][ path.string() ].push_back( identifier );
+    filetype_identifier_map[ filetype ][ path.string() ].push_back(
+      identifier );
   }
 
   return filetype_identifier_map;
