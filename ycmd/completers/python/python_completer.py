@@ -29,6 +29,7 @@ from ycmd.utils import ExpandVariablesInPath, FindExecutable, LOGGER
 import os
 import jedi
 import parso
+from collections import defaultdict
 from threading import Lock
 
 
@@ -45,6 +46,7 @@ class PythonCompleter( Completer ):
     self._environment_for_file = {}
     self._environment_for_interpreter_path = {}
     self._sys_path_for_file = {}
+    self._preloaded_modules = defaultdict( set )
 
 
   def SupportedFiletypes( self ):
@@ -55,7 +57,29 @@ class PythonCompleter( Completer ):
     # This is implicitly loading the extra conf file and caching the Jedi
     # environment and Python path.
     environment = self._EnvironmentForRequest( request_data )
-    self._SysPathForFile( request_data, environment )
+    sys_path = tuple( self._SysPathForFile( request_data, environment ) )
+
+    with self._jedi_lock:
+      definitions = self._GetJediNames( request_data, environment )
+
+      # full_name may be empty for some modules (e.g. builtins). Use name
+      # instead in that case.
+      # TODO: report the issue on Jedi tracker.
+      modules = {
+        definition.full_name or definition.name
+        for definition in definitions if definition.type == 'module'
+      }
+
+      preloaded_modules = self._preloaded_modules[ environment.executable,
+                                                   sys_path ]
+      if modules <= preloaded_modules:
+        return
+
+      modules -= preloaded_modules
+
+      self._PreloadModules( sys_path, environment, modules )
+
+      self._preloaded_modules[ environment.executable, sys_path ] |= modules
 
 
   def _SettingsForRequest( self, request_data ):
@@ -172,6 +196,17 @@ class PythonCompleter( Completer ):
                         environment = environment )
 
 
+  def _GetJediNames( self, request_data, environment ):
+    path = request_data[ 'filepath' ]
+    source = request_data[ 'file_data' ][ path ][ 'contents' ]
+    return jedi.names( source,
+                       path,
+                       all_scopes = True,
+                       definitions = True,
+                       references = True,
+                       environment = environment )
+
+
   # This method must be called under Jedi's lock.
   def _GetExtraData( self, completion ):
     if completion.module_path and completion.line and completion.column:
@@ -183,6 +218,22 @@ class PythonCompleter( Completer ):
         }
       }
     return {}
+
+
+  # This method must be called under Jedi's lock.
+  def _PreloadModules( self, sys_path, environment, modules ):
+    # Reimplementation of jedi.preload_module() optimized for our use case.
+    LOGGER.debug( 'Preload modules: %s', modules )
+    for module in modules:
+      completions = jedi.Script( 'import {} as x; x.'.format( module ),
+                                 sys_path = sys_path,
+                                 environment = environment ).completions()
+      for completion in completions:
+        completion.name
+        self._BuildTypeInfo( completion )
+        completion.docstring()
+        completion.type
+        self._GetExtraData( completion )
 
 
   def ComputeCandidatesInner( self, request_data ):
