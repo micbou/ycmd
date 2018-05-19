@@ -43,7 +43,7 @@ TEST( IdentifierUtilsTest, ExtractIdentifiersFromTagsFileWorks ) {
   .push_back( "i1" );
   expected[ "cpp" ][ ( testfile_parent / "foo" ).string() ]
   .push_back( "foosy" );
-  expected[ "cpp" ][ ( testfile_parent / "bar" ).string() ]
+  expected[ "cpp" ][ testfile_parent.string() ]
   .push_back( "fooaaa" );
 
   expected[ "c" ][ ( root / "foo" / "zoo" ).string() ].push_back( "Floo::goo" );

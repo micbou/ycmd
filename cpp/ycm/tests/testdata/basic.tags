@@ -7,7 +7,7 @@
 i1	foo	junky;'junklanguage:C++
 i1	bar	junky;'junklanguage:C++
 foosy	foo	junky;"'junk	language:C++	zanzibar
-fooaaa	bar	junky;"'junk	language:C++	zanzibar
+fooaaa		junky;"'junk	language:C++	zanzibar
 bloa	foo	junky
 Floo::goo	/foo/zoo	language:C
 !goo	/foo/goo maa	language:C
