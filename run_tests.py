@@ -134,6 +134,8 @@ def ParseArguments():
                               'manually, then exit.' )
   parser.add_argument( '--no-retry', action = 'store_true',
                        help = 'Disable retry of flaky tests' )
+  parser.add_argument( '--runs', type = int, default = 1,
+                       help = 'Number of test runs.' )
 
   parsed_args, nosetests_args = parser.parse_known_args()
 
@@ -229,8 +231,13 @@ def NoseTests( parsed_args, extra_nosetests_args ):
     # Useful for _writing_ tests
     env[ 'YCM_TEST_NO_RETRY' ] = '1'
 
-  subprocess.check_call( [ sys.executable, '-m', 'nose' ] + nosetests_args,
-                         env=env )
+  for number in range( 1, parsed_args.runs + 1 ):
+    sys.stdout.write(
+      'Run {number}/{total}\n'.format( number = number,
+                                       total = parsed_args.runs ) )
+    sys.stdout.flush()
+    subprocess.check_call( [ sys.executable, '-m', 'nose' ] + nosetests_args,
+                           env = env )
 
 
 def Main():
