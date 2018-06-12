@@ -10,5 +10,5 @@ if %msvc% == 2013 (
 if defined YCM_BENCHMARK (
   python benchmark.py --msvc %msvc%
 ) else (
-  python run_tests.py --msvc %msvc%
+  python run_tests.py --no-flake8 --runs 50 -- ycmd\tests\shutdown_test.py:Shutdown_test.FromWatchdogWithSubservers_test
 )

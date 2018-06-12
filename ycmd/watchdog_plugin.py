@@ -69,6 +69,7 @@ class WatchdogPlugin( object ):
 
 
   def _SetLastRequestTime( self, new_value ):
+    _logger.info( 'Set last request time: {}', new_value )
     with self._last_request_time_lock:
       self._last_request_time = new_value
 
@@ -89,6 +90,7 @@ class WatchdogPlugin( object ):
     while True:
       time.sleep( self._check_interval_seconds )
 
+      _logger.info( 'Check inactivity' )
       # We make sure we don't terminate if we skipped a wakeup time. If we
       # skipped a check, that means the machine probably went to sleep and the
       # client might still actually be up. In such cases, we give it one more

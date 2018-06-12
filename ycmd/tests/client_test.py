@@ -130,17 +130,24 @@ class Client_test( object ):
     return response.json()
 
 
-  def _WaitUntilReady( self, filetype = None, timeout = 30 ):
+  def _WaitUntilReady( self, filetype = None, timeout = 120 ):
     expiration = time.time() + timeout
     while True:
       try:
+        server = ( 'the {0} subserver'.format( filetype ) if filetype else
+                   'ycmd' )
         if time.time() > expiration:
-          server = ( 'the {0} subserver'.format( filetype ) if filetype else
-                     'ycmd' )
+          for logfile in self._logfiles:
+            if os.path.isfile( logfile ):
+              sys.stdout.write( 'Logfile {0}:\n\n'.format( logfile ) )
+              sys.stdout.write( ReadFile( logfile ) )
+              sys.stdout.write( '\n' )
           raise RuntimeError( 'Waited for {0} to be ready for {1} seconds, '
                               'aborting.'.format( server, timeout ) )
 
         if self._IsReady( filetype ):
+          print( 'Subserver {0} ready in {1} seconds'.format(
+            server, time.time() - expiration + timeout ) )
           return
       except requests.exceptions.ConnectionError:
         pass
