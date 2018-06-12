@@ -17,6 +17,22 @@ environment:
     arch: 64
     python: 36
     COVERAGE: false
+    YCMD_RUN: 1
+  - APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2017
+    arch: 64
+    python: 36
+    COVERAGE: false
+    YCMD_RUN: 2
+  - APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2017
+    arch: 64
+    python: 36
+    COVERAGE: false
+    YCMD_RUN: 3
+  - APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2017
+    arch: 64
+    python: 36
+    COVERAGE: false
+    YCMD_RUN: 4
 #  - APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2017
 #    arch: 64
 #    python: 36
