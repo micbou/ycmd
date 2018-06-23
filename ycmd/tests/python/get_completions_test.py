@@ -24,7 +24,6 @@ from __future__ import division
 # Not installing aliases from python-future; it's unreliable and slow.
 from builtins import *  # noqa
 
-from nose.tools import eq_
 from hamcrest import ( all_of,
                        assert_that,
                        contains,
@@ -35,6 +34,8 @@ from hamcrest import ( all_of,
                        has_entry,
                        has_entries,
                        is_not )
+from nose.tools import eq_
+from pprint import pformat
 import requests
 
 from ycmd.utils import ReadFile
@@ -72,6 +73,8 @@ def RunTest( app, test ):
                               'contents': contents
                             } ),
                             expect_errors = True )
+
+  print( 'completer response: {}'.format( pformat( response.json ) ) )
 
   eq_( response.status_code, test[ 'expect' ][ 'response' ] )
 
@@ -184,6 +187,81 @@ def GetCompletions_NoSuggestions_Fallback_test( app ):
       } )
     }
   } )
+
+
+@IsolatedYcmd( { 'max_num_candidates': 0 } )
+def GetCompletions_Import( app, test ):
+  if test[ 'completions' ]:
+    completions = has_items( *( CompletionEntryMatcher( completion )
+                             for completion in test[ 'completions' ] ) )
+  else:
+    completions = empty()
+
+  RunTest( app, {
+    'description': 'semantic completion is automatically triggered '
+                   'for import statements',
+    'request': {
+      'filetype'  : 'python',
+      'filepath'  : PathToTestFile( 'import', 'import.py' ),
+      'line_num'  : test[ 'request' ][ 0 ],
+      'column_num': test[ 'request' ][ 1 ]
+    },
+    'expect': {
+      'response': requests.codes.ok,
+      'data': has_entries( {
+        'completions': completions,
+        'errors': empty()
+      } )
+    }
+  } )
+
+
+def GetCompletions_Import_test():
+  tests = [
+    # import ... as ...
+    { 'request': [ 1,  1 ], 'completions': [] },
+    { 'request': [ 1,  8 ], 'completions': [ 'module1', 'module2' ] },
+    { 'request': [ 1, 16 ], 'completions': [ 'as' ] },
+    { 'request': [ 1, 19 ], 'completions': [] },
+    { 'request': [ 1, 24 ], 'completions': [ 'module1', 'module2' ] },
+    { 'request': [ 1, 29 ], 'completions': [ 'module1', 'module2' ] },
+    { 'request': [ 1, 34 ], 'completions': [ 'as' ] },
+    { 'request': [ 1, 36 ], 'completions': [] },
+    { 'request': [ 1, 41 ], 'completions': [] },
+    # from ... import ... as ...
+    { 'request': [ 2,  6 ], 'completions': [ 'module1', 'module2' ] },
+    { 'request': [ 2, 14 ], 'completions': [ 'import' ] },
+    { 'request': [ 2, 18 ], 'completions': [ 'import' ] },
+    { 'request': [ 2, 21 ], 'completions': [ 'submodule1', 'submodule2' ] },
+    { 'request': [ 2, 28 ], 'completions': [ 'submodule1', 'submodule2' ] },
+    { 'request': [ 2, 32 ], 'completions': [ 'as' ] },
+    { 'request': [ 2, 34 ], 'completions': [ 'submodule1', 'submodule2' ] },
+    { 'request': [ 2, 43 ], 'completions': [ 'submodule1', 'submodule2' ] },
+    { 'request': [ 2, 46 ], 'completions': [ 'as' ] },
+    { 'request': [ 2, 48 ], 'completions': [] },
+    { 'request': [ 2, 54 ], 'completions': [ 'submodule1', 'submodule2' ] },
+    # Import on multiple lines using backslash
+    { 'request': [ 3, 18 ], 'completions': [ 'submodule1', 'submodule2' ] },
+    { 'request': [ 3, 36 ], 'completions': [ 'bar', 'foo', 'xyz' ] },
+    { 'request': [ 3, 41 ], 'completions': [ 'bar', 'foo', 'xyz' ] },
+    { 'request': [ 4,  9 ], 'completions': [ 'bar', 'foo', 'xyz' ] },
+    { 'request': [ 4, 13 ], 'completions': [ 'as' ] },
+    { 'request': [ 4, 16 ], 'completions': [ 'bar', 'foo', 'xyz' ] },
+    { 'request': [ 4, 20 ], 'completions': [ 'as' ] },
+    # Import on multiple lines using parentheses
+    { 'request': [ 5, 36 ], 'completions': [ 'bar', 'foo', 'xyz' ] },
+    { 'request': [ 5, 40 ], 'completions': [ 'bar', 'foo', 'xyz' ] },
+    { 'request': [ 6, 36 ], 'completions': [ 'bar', 'foo', 'xyz' ] },
+    { 'request': [ 6, 40 ], 'completions': [ 'as' ] },
+    { 'request': [ 7, 36 ], 'completions': [ 'bar', 'foo', 'xyz' ] },
+    { 'request': [ 7, 40 ], 'completions': [ 'as' ] },
+    { 'request': [ 7, 42 ], 'completions': [] },
+    # Import containing identifiers starting with "from", "import", or "as".
+    { 'request': [ 10, 25 ], 'completions': [ 'from_', 'import_', 'as_' ] }
+  ]
+
+  for test in tests:
+    yield GetCompletions_Import, test
 
 
 @SharedYcmd

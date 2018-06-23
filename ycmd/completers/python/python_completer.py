@@ -26,10 +26,71 @@ from ycmd import extra_conf_store, responses
 from ycmd.completers.completer import Completer
 from ycmd.utils import ExpandVariablesInPath, FindExecutable, LOGGER
 
-import os
 import jedi
+import os
 import parso
+import re
 from threading import Lock
+
+
+IMPORT_KEYWORDS = [ 'from', 'import', 'as' ]
+
+IMPORT_TOKEN_REGEX = re.compile( """
+  (?P<Identifier>[^\\W\\d]\\w*)
+  |
+  (?P<Skip>[ \t]+)
+  |
+  (?P<Dot>\\.)
+  |
+  (?P<Comma>,)
+  |
+  (?P<Backslash>\\\\)
+  |
+  (?P<Parenthesis>\\()
+  |
+  (?P<Mismatch>.)
+""", re.VERBOSE )
+
+IMPORT_GRAMMAR_REGEX = re.compile( """
+  ^(
+  Import
+    (
+      ((IdentifierDot)*Identifier(AsIdentifier)?Comma)*
+        (
+          (IdentifierDot)*
+            (
+              Identifier
+                (
+                  (AsIdentifier)?
+                )?
+            )?
+        )?
+    )?
+  |
+  From
+    (
+      (
+      (Dot)*(IdentifierDot)*Identifier
+      |
+      (Dot)+
+      )
+        (
+          Import
+            (
+              (
+                Parenthesis
+              )?
+              (
+                (Identifier(AsIdentifier)?Comma)*
+                  (
+                    Identifier
+                  )?
+              )?
+            )?
+        )?
+    )?
+  )$
+""", re.VERBOSE )
 
 
 class PythonCompleter( Completer ):
@@ -183,6 +244,48 @@ class PythonCompleter( Completer ):
         }
       }
     return {}
+
+
+  def ShouldCompleteImportStatement( self, request_data ):
+    line_num = request_data[ 'line_num' ] - 1
+    lines = request_data[ 'lines' ]
+    line = request_data[ 'prefix' ]
+
+    is_current_line = True
+    contains_parenthesis = False
+    multiline_backslash = True
+    statement = ''
+
+    while line_num >= 0:
+      line_statement, ends_with_backslash, line_contains_parenthesis = (
+        _TokenizeImportLine( line ) )
+      if line_statement is None:
+        return False
+
+      statement = line_statement + statement
+
+      if line_contains_parenthesis:
+        contains_parenthesis = True
+
+      if not is_current_line and not ends_with_backslash:
+        multiline_backslash = False
+
+      if statement.startswith( 'From' ) or statement.startswith( 'Import' ):
+        if is_current_line or contains_parenthesis or multiline_backslash:
+          return bool( IMPORT_GRAMMAR_REGEX.search( statement ) )
+        return False
+
+      line_num -= 1
+      line = lines[ line_num ]
+      is_current_line = False
+
+    return False
+
+
+  def ShouldUseNowInner( self, request_data ):
+    if self.ShouldCompleteImportStatement( request_data ):
+      return True
+    return super( PythonCompleter, self ).ShouldUseNowInner( request_data )
 
 
   def ComputeCandidatesInner( self, request_data ):
@@ -349,3 +452,36 @@ class PythonCompleter( Completer ):
                                                        python_version,
                                                        jedi_version,
                                                        parso_version ] )
+
+
+def _TokenizeImportLine( line ):
+  line_statement = ''
+  ends_with_backslash = False
+  contains_parenthesis = False
+
+  for match in IMPORT_TOKEN_REGEX.finditer( line ):
+    token = match.lastgroup
+
+    if token == 'Identifier':
+      value = match.group( token )
+      if value in IMPORT_KEYWORDS:
+        token = value.capitalize()
+
+    if token == 'Backslash':
+      if match.end( token ) != len( line ):
+        return None, ends_with_backslash, contains_parenthesis
+      ends_with_backslash = True
+      continue
+
+    if token == 'Mismatch':
+      return None, ends_with_backslash, contains_parenthesis
+
+    if token == 'Skip':
+      continue
+
+    if token == 'Parenthesis':
+      contains_parenthesis = True
+
+    line_statement += token
+
+  return line_statement, ends_with_backslash, contains_parenthesis
