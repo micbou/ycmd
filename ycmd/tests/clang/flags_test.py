@@ -32,7 +32,8 @@ from types import ModuleType
 from ycmd.tests.test_utils import MacOnly, TemporaryTestDir, WindowsOnly
 from ycmd.responses import NoExtraConfDetected
 from ycmd.tests.clang import TemporaryClangProject
-from ycmd.completers.cpp.flags import _ShouldAllowWinStyleFlags
+from ycmd.completers.cpp.flags import ( _ShouldAllowWinStyleFlags,
+                                        SPECIAL_CLANG_INCLUDES )
 
 from hamcrest import ( assert_that,
                        calling,
@@ -814,18 +815,27 @@ def ExtraClangFlags_test():
         return_value = [ '1.0.0', '7.0.1', '7.0.2', '___garbage__' ] )
 @patch( 'ycmd.completers.cpp.flags._MacClangIncludeDirExists',
         side_effect = [ False, True, True, True ] )
+@patch( 'ycm_core.UseSystemClang', return_value = True )
 def Mac_LatestMacClangIncludes_test( *args ):
   eq_( flags._LatestMacClangIncludes( '/tmp' ),
        [ '/tmp/usr/lib/clang/7.0.2/include' ] )
 
 
 @MacOnly
-def Mac_LatestMacClangIncludes_NoSuchDirectory_test():
+@patch( 'ycm_core.UseSystemClang', return_value = True )
+def Mac_LatestMacClangIncludes_NoSuchDirectory_test( *args ):
   def RaiseOSError( x ):
     raise OSError( x )
 
   with patch( 'os.listdir', side_effect = RaiseOSError ):
     eq_( flags._LatestMacClangIncludes( '/tmp' ), [] )
+
+
+@MacOnly
+@patch( 'ycm_core.UseSystemClang', return_value = False )
+def Mac_LatestMacClangIncludes_NotUsingSystemClang_test( *args ):
+  eq_( flags._LatestMacClangIncludes( '/tmp' ),
+       [ os.path.join( SPECIAL_CLANG_INCLUDES, 'include' ) ] )
 
 
 @MacOnly

@@ -44,6 +44,14 @@ std::string ClangVersion() {
   return CXStringToString( clang_getClangVersion() );
 }
 
+bool UseSystemClang() {
+#if USE_SYSTEM_CLANG
+  return true;
+#else
+  return false;
+#endif
+}
+
 const char *CXErrorCodeToString( CXErrorCode code ) {
   switch ( code ) {
     case CXError_Success:

@@ -31,6 +31,9 @@ from ycmd.utils import ( re, ToCppStringCompatible, OnMac, OnWindows, ToUnicode,
                          ToBytes, PathsToAllParentFolders )
 from ycmd.responses import NoExtraConfDetected
 
+SPECIAL_CLANG_INCLUDES = os.path.join( os.path.dirname( ycm_core.__file__ ),
+                                       'clang_includes' )
+
 # -include-pch and --sysroot= must be listed before -include and --sysroot
 # respectively because the latter is a prefix of the former (and the algorithm
 # checks prefixes).
@@ -535,16 +538,21 @@ def _MacClangIncludeDirExists( candidate_include ):
   return os.path.exists( candidate_include )
 
 
-# Add in any clang headers found in the supplied toolchain. These are
-# required for the same reasons as described below, but unfortuantely, these
+# Add in any Clang headers found in the supplied toolchain. These are
+# required for the same reasons as described below, but unfortunately, these
 # are in versioned directories and there is no easy way to find the "correct"
 # version. We simply pick the highest version in the first toolchain that we
-# find, as this is the most likely to be correct.
+# find, as this is the most likely to be correct. Only do that if system Clang
+# is used since its headers are not compatible with upstream Clang. Return the
+# bundled ones instead.
 def _LatestMacClangIncludes( toolchain ):
-  # we use the first toolchain which actually contains any versions, rather
+  if not ycm_core.UseSystemClang():
+    return [ os.path.join( SPECIAL_CLANG_INCLUDES, 'include' ) ]
+
+  # We use the first toolchain which actually contains any versions, rather
   # than trying all of the toolchains and picking the highest. We
   # favour Xcode over CommandLineTools as using Xcode is more common.
-  # It might be possible to extrace this information from xcode-select, though
+  # It might be possible to extract this information from xcode-select, though
   # xcode-select -p does not point at the toolchain directly
   candidates_dir = os.path.join( toolchain, 'usr', 'lib', 'clang' )
   versions = _GetMacClangVersionList( candidates_dir )
@@ -572,12 +580,12 @@ if OnMac():
   if toolchain:
     MAC_INCLUDE_PATHS = (
       [ os.path.join( toolchain, 'usr/include/c++/v1' ),
-        '/usr/local/include',
-        os.path.join( toolchain, 'usr/include' ),
+        '/usr/local/include' ] +
+      _LatestMacClangIncludes( toolchain ) +
+      [ os.path.join( toolchain, 'usr/include' ),
         '/usr/include',
         '/System/Library/Frameworks',
         '/Library/Frameworks' ] +
-      _LatestMacClangIncludes( toolchain ) +
       # We include the MacOS platform SDK because some meaningful parts of the
       # standard library are located there. If users are compiling for (say)
       # iPhone.platform, etc. they should appear earlier in the include path.
@@ -594,7 +602,7 @@ def _AddMacIncludePaths( flags ):
 
 
 def _ExtraClangFlags():
-  flags = _SpecialClangIncludes()
+  flags = [ '-resource-dir=' + SPECIAL_CLANG_INCLUDES ]
   # On Windows, parsing of templates is delayed until instantiation time.
   # This makes GetType and GetParent commands fail to return the expected
   # result when the cursor is in a template.
@@ -625,12 +633,6 @@ def _EnableTypoCorrection( flags ):
 
   flags.append( '-fspell-checking' )
   return flags
-
-
-def _SpecialClangIncludes():
-  libclang_dir = os.path.dirname( ycm_core.__file__ )
-  path_to_includes = os.path.join( libclang_dir, 'clang_includes' )
-  return [ '-resource-dir=' + path_to_includes ]
 
 
 def _MakeRelativePathsInFlagsAbsolute( flags, working_directory ):

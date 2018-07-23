@@ -93,6 +93,8 @@ PYBIND11_MODULE( ycm_core, mod )
 
   mod.def( "ClangVersion", ClangVersion );
 
+  mod.def( "UseSystemClang", UseSystemClang );
+
   // CAREFUL HERE! For filename and contents we are referring directly to
   // Python-allocated and -managed memory since we are accepting pointers to
   // data members of python objects. We need to ensure that those objects

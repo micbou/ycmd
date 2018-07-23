@@ -38,6 +38,8 @@ std::string CXFileToFilepath( CXFile file );
 
 std::string ClangVersion();
 
+bool UseSystemClang();
+
 const char *CXErrorCodeToString( CXErrorCode code );
 
 /**

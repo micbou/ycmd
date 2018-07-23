@@ -219,6 +219,9 @@ if ( USE_CLANG_COMPLETER )
     ${CMAKE_CURRENT_SOURCE_DIR}
     "${CMAKE_CURRENT_SOURCE_DIR}/ClangCompleter" )
   add_definitions( -DUSE_CLANG_COMPLETER )
+  if ( USE_SYSTEM_LIBCLANG )
+    add_definitions( -DUSE_SYSTEM_CLANG )
+  endif()
 else()
   file( GLOB_RECURSE to_remove_clang ClangCompleter/*.h ClangCompleter/*.cpp )
 
