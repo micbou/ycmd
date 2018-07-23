@@ -59,16 +59,16 @@ class FilenameCompleter( Completer ):
         [A-z]+:[%(sep)s]|
 
         # '/', './', '../', or '~'
-        \.{0,2}[%(sep)s]|~|
+        \\.{0,2}[%(sep)s]|~|
 
         # '$var/'
-        \$[A-Za-z0-9{}_]+[%(sep)s]
+        \\$[A-Za-z0-9{}_]+[%(sep)s]
       )+
 
       # Tail part
       (?:
         # any alphanumeric, symbol or space literal
-        [ %(sep)sa-zA-Z0-9(){}$+_~.\x80-\xff-\[\]]|
+        [ %(sep)sa-zA-Z0-9(){}$+_~.\x80-\xff-\\[\\]]|
 
         # skip any special symbols
         [^\x20-\x7E]|

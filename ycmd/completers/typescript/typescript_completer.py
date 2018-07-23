@@ -870,7 +870,7 @@ def _ConvertDetailedCompletionData( request_data, completion_data ):
   else:
     # Strip new lines and indentation from the signature to display it on one
     # line.
-    extra_menu_info = re.sub( '\s+', ' ', signature )
+    extra_menu_info = re.sub( r'\s+', ' ', signature )
     detailed_info = [ signature ]
 
   docs = completion_data.get( 'documentation', [] )
