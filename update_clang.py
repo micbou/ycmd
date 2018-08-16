@@ -47,7 +47,9 @@ def OnMac():
 
 LLVM_DOWNLOAD_DATA = {
   'win32': {
-    'url': 'https://releases.llvm.org/{llvm_version}/{llvm_package}',
+    'release_url': 'https://releases.llvm.org/{llvm_version}/{llvm_package}',
+    'prerelease_url': ( 'https://prereleases.llvm.org/{llvm_version}/'
+                        'rc{llvm_prerelease}/{llvm_package}' ),
     'format': 'nsis',
     'llvm_package': 'LLVM-{llvm_version}-{os_name}.exe',
     'ycmd_package': 'libclang-{llvm_version}-{os_name}.tar.bz2',
@@ -57,7 +59,9 @@ LLVM_DOWNLOAD_DATA = {
     ]
   },
   'win64': {
-    'url': 'https://releases.llvm.org/{llvm_version}/{llvm_package}',
+    'release_url': 'https://releases.llvm.org/{llvm_version}/{llvm_package}',
+    'prerelease_url': ( 'https://prereleases.llvm.org/{llvm_version}/'
+                        'rc{llvm_prerelease}/{llvm_package}' ),
     'format': 'nsis',
     'llvm_package': 'LLVM-{llvm_version}-{os_name}.exe',
     'ycmd_package': 'libclang-{llvm_version}-{os_name}.tar.bz2',
@@ -67,7 +71,9 @@ LLVM_DOWNLOAD_DATA = {
     ]
   },
   'x86_64-apple-darwin': {
-    'url': 'https://releases.llvm.org/{llvm_version}/{llvm_package}',
+    'release_url': 'https://releases.llvm.org/{llvm_version}/{llvm_package}',
+    'prerelease_url': ( 'https://prereleases.llvm.org/{llvm_version}/'
+                        'rc{llvm_prerelease}/{llvm_package}' ),
     'format': 'lzma',
     'llvm_package': 'clang+llvm-{llvm_version}-{os_name}.tar.xz',
     'ycmd_package': 'libclang-{llvm_version}-{os_name}.tar.bz2',
@@ -76,8 +82,10 @@ LLVM_DOWNLOAD_DATA = {
     ]
   },
   'x86_64-unknown-linux-gnu': {
-    'url': ( 'https://github.com/micbou/llvm/releases/download/{llvm_version}/'
-             '{llvm_package}' ),
+    'release_url': ( 'https://github.com/micbou/llvm/releases/'
+                     'download/{llvm_version}/{llvm_package}' ),
+    'prerelease_url': ( 'https://github.com/micbou/llvm/releases/download/'
+                        '{llvm_version}rc{llvm_prerelease}/{llvm_package}' ),
     'format': 'lzma',
     'llvm_package': 'clang+llvm-{llvm_version}-{os_name}.tar.xz',
     'ycmd_package': 'libclang-{llvm_version}-{os_name}.tar.bz2',
@@ -88,7 +96,9 @@ LLVM_DOWNLOAD_DATA = {
     ]
   },
   'i386-unknown-freebsd-10': {
-    'url': 'https://releases.llvm.org/{llvm_version}/{llvm_package}',
+    'release_url': 'https://releases.llvm.org/{llvm_version}/{llvm_package}',
+    'prerelease_url': ( 'https://prereleases.llvm.org/{llvm_version}/'
+                        'rc{llvm_prerelease}/{llvm_package}' ),
     'format': 'lzma',
     'llvm_package': 'clang+llvm-{llvm_version}-{os_name}.tar.xz',
     'ycmd_package': 'libclang-{llvm_version}-{os_name}.tar.bz2',
@@ -99,7 +109,9 @@ LLVM_DOWNLOAD_DATA = {
     ]
   },
   'amd64-unknown-freebsd-10': {
-    'url': 'https://releases.llvm.org/{llvm_version}/{llvm_package}',
+    'release_url': 'https://releases.llvm.org/{llvm_version}/{llvm_package}',
+    'prerelease_url': ( 'https://prereleases.llvm.org/{llvm_version}/'
+                        'rc{llvm_prerelease}/{llvm_package}' ),
     'format': 'lzma',
     'llvm_package': 'clang+llvm-{llvm_version}-{os_name}.tar.xz',
     'ycmd_package': 'libclang-{llvm_version}-{os_name}.tar.bz2',
@@ -110,7 +122,9 @@ LLVM_DOWNLOAD_DATA = {
     ]
   },
   'aarch64-linux-gnu': {
-    'url': 'https://releases.llvm.org/{llvm_version}/{llvm_package}',
+    'release_url': 'https://releases.llvm.org/{llvm_version}/{llvm_package}',
+    'prerelease_url': ( 'https://prereleases.llvm.org/{llvm_version}/'
+                        'rc{llvm_prerelease}/{llvm_package}' ),
     'format': 'lzma',
     'llvm_package': 'clang+llvm-{llvm_version}-{os_name}.tar.xz',
     'ycmd_package': 'libclang-{llvm_version}-{os_name}.tar.bz2',
@@ -121,7 +135,9 @@ LLVM_DOWNLOAD_DATA = {
     ]
   },
   'armv7a-linux-gnueabihf': {
-    'url': 'https://releases.llvm.org/{llvm_version}/{llvm_package}',
+    'release_url': 'https://releases.llvm.org/{llvm_version}/{llvm_package}',
+    'prerelease_url': ( 'https://prereleases.llvm.org/{llvm_version}/'
+                        'rc{llvm_prerelease}/{llvm_package}' ),
     'format': 'lzma',
     'llvm_package': 'clang+llvm-{llvm_version}-{os_name}.tar.xz',
     'ycmd_package': 'libclang-{llvm_version}-{os_name}.tar.bz2',
@@ -220,7 +236,8 @@ def MakeBundle( files_to_copy,
   archive_name = os.path.basename( bundle_file_name )
   print( 'Bundling files to {}'.format( archive_name ) )
   with tarfile.open( name=bundle_file_name, mode='w:bz2' ) as tar_file:
-    tar_file.add( license_file_name, arcname='LICENSE.TXT' )
+    if license_file_name:
+      tar_file.add( license_file_name, arcname='LICENSE.TXT' )
     for file_name in files_to_copy:
       arcname = file_name.format( llvm_version = version )
       name = os.path.join( source_dir, arcname )
@@ -277,6 +294,8 @@ def ParseArguments():
   parser.add_argument( '--no-upload', action='store_true',
                        help = "For testing, just build the bundles; don't "
                               "upload to bintray. Useful with --output-dir." )
+  parser.add_argument( '--release-candidate', action='store', type = int,
+                       help = "Release candidate number." )
 
   args = parser.parse_args()
 
@@ -330,14 +349,25 @@ def PrepareBundleNSIS( cache_dir, llvm_package, download_url, temp_dir ):
 
 def BundleAndUpload( args, temp_dir, output_dir, os_name, download_data,
                      license_file_name, hashes ):
+  if args.release_candidate:
+    version = args.version + '-rc' + str( args.release_candidate )
+  else:
+    version = args.version
   llvm_package = download_data[ 'llvm_package' ].format(
     os_name = os_name,
-    llvm_version = args.version )
+    llvm_version = version )
   ycmd_package = download_data[ 'ycmd_package' ].format(
     os_name = os_name,
-    llvm_version = args.version )
-  download_url = download_data[ 'url' ].format( llvm_version = args.version,
-                                                llvm_package = llvm_package )
+    llvm_version = version )
+  if args.release_candidate:
+    download_url = download_data[ 'prerelease_url' ].format(
+      llvm_version = args.version,
+      llvm_prerelease = args.release_candidate,
+      llvm_package = llvm_package )
+  else:
+    download_url = download_data[ 'release_url' ].format(
+      llvm_version = args.version,
+      llvm_package = llvm_package )
 
   ycmd_package_file = os.path.join( output_dir, ycmd_package )
 
@@ -377,12 +407,18 @@ def Overwrite( src, dest ):
 
 
 def UpdateClangHeaders( args, temp_dir ):
-  src_name = 'cfe-{version}.src'.format( version = args.version )
+  if args.release_candidate:
+    version = args.version + 'rc' + str( args.release_candidate )
+  else:
+    version = args.version
+  src_name = 'cfe-{version}.src'.format( version = version )
   archive_name = src_name + '.tar.xz'
 
-  compressed_data = Download( 'https://releases.llvm.org/{version}/'
-                              '{archive}'.format( version = args.version,
-                                                  archive = archive_name ) )
+  compressed_data = Download(
+    'http://prereleases.llvm.org/{version}/rc{prerelease}/'
+    '{archive}'.format( version = args.version,
+                        prerelease = args.release_candidate,
+                        archive = archive_name ) )
   print( 'Extracting {}'.format( archive_name ) )
   src = ExtractLZMA( compressed_data, temp_dir )
 
@@ -405,7 +441,10 @@ def Main():
   try:
     hashes = dict()
     with TemporaryDirectory() as temp_dir:
-      license_file_name = DownloadClangLicense( args.version, temp_dir )
+      if args.release_candidate:
+        license_file_name = None
+      else:
+        license_file_name = DownloadClangLicense( args.version, temp_dir )
       for os_name, download_data in iteritems( LLVM_DOWNLOAD_DATA ):
         BundleAndUpload( args, temp_dir, output_dir, os_name, download_data,
                          license_file_name, hashes )
