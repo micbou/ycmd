@@ -82,20 +82,19 @@ LLVM_DOWNLOAD_DATA = {
     ]
   },
   'x86_64-unknown-linux-gnu': {
-    'release_url': ( 'https://github.com/micbou/llvm/releases/'
-                     'download/{llvm_version}/{llvm_package}' ),
+    'release_url': ( 'https://github.com/micbou/llvm/releases/download/'
+                     '{llvm_version}/{llvm_package}' ),
     'prerelease_url': ( 'https://github.com/micbou/llvm/releases/download/'
-                        '{llvm_version}rc{llvm_prerelease}/{llvm_package}' ),
+                        '{llvm_version}-rc{llvm_prerelease}/{llvm_package}' ),
     'format': 'lzma',
     'llvm_package': 'clang+llvm-{llvm_version}-{os_name}.tar.xz',
     'ycmd_package': 'libclang-{llvm_version}-{os_name}.tar.bz2',
     'files_to_copy': [
       os.path.join( 'lib', 'libclang.so' ),
-      os.path.join( 'lib', 'libclang.so.{llvm_version:.1}' ),
-      os.path.join( 'lib', 'libclang.so.{llvm_version:.3}' )
+      os.path.join( 'lib', 'libclang.so.{llvm_version:.1}' )
     ]
   },
-  'i386-unknown-freebsd-10': {
+  'i386-unknown-freebsd11': {
     'release_url': 'https://releases.llvm.org/{llvm_version}/{llvm_package}',
     'prerelease_url': ( 'https://prereleases.llvm.org/{llvm_version}/'
                         'rc{llvm_prerelease}/{llvm_package}' ),
@@ -104,11 +103,10 @@ LLVM_DOWNLOAD_DATA = {
     'ycmd_package': 'libclang-{llvm_version}-{os_name}.tar.bz2',
     'files_to_copy': [
       os.path.join( 'lib', 'libclang.so' ),
-      os.path.join( 'lib', 'libclang.so.{llvm_version:.1}' ),
-      os.path.join( 'lib', 'libclang.so.{llvm_version:.3}' )
+      os.path.join( 'lib', 'libclang.so.{llvm_version:.1}' )
     ]
   },
-  'amd64-unknown-freebsd-10': {
+  'amd64-unknown-freebsd11': {
     'release_url': 'https://releases.llvm.org/{llvm_version}/{llvm_package}',
     'prerelease_url': ( 'https://prereleases.llvm.org/{llvm_version}/'
                         'rc{llvm_prerelease}/{llvm_package}' ),
@@ -117,8 +115,7 @@ LLVM_DOWNLOAD_DATA = {
     'ycmd_package': 'libclang-{llvm_version}-{os_name}.tar.bz2',
     'files_to_copy': [
       os.path.join( 'lib', 'libclang.so' ),
-      os.path.join( 'lib', 'libclang.so.{llvm_version:.1}' ),
-      os.path.join( 'lib', 'libclang.so.{llvm_version:.3}' )
+      os.path.join( 'lib', 'libclang.so.{llvm_version:.1}' )
     ]
   },
   'aarch64-linux-gnu': {
@@ -130,8 +127,7 @@ LLVM_DOWNLOAD_DATA = {
     'ycmd_package': 'libclang-{llvm_version}-{os_name}.tar.bz2',
     'files_to_copy': [
       os.path.join( 'lib', 'libclang.so' ),
-      os.path.join( 'lib', 'libclang.so.{llvm_version:.1}' ),
-      os.path.join( 'lib', 'libclang.so.{llvm_version:.3}' )
+      os.path.join( 'lib', 'libclang.so.{llvm_version:.1}' )
     ]
   },
   'armv7a-linux-gnueabihf': {
@@ -143,8 +139,7 @@ LLVM_DOWNLOAD_DATA = {
     'ycmd_package': 'libclang-{llvm_version}-{os_name}.tar.bz2',
     'files_to_copy': [
       os.path.join( 'lib', 'libclang.so' ),
-      os.path.join( 'lib', 'libclang.so.{llvm_version:.1}' ),
-      os.path.join( 'lib', 'libclang.so.{llvm_version:.3}' )
+      os.path.join( 'lib', 'libclang.so.{llvm_version:.1}' )
     ]
   },
 }
@@ -371,19 +366,25 @@ def BundleAndUpload( args, temp_dir, output_dir, os_name, download_data,
 
   ycmd_package_file = os.path.join( output_dir, ycmd_package )
 
-  if download_data[ 'format' ] == 'lzma':
-    package_dir = PrepareBundleLZMA( args.from_cache,
-                                     llvm_package,
-                                     download_url,
-                                     temp_dir )
-  elif download_data[ 'format' ] == 'nsis':
-    package_dir = PrepareBundleNSIS( args.from_cache,
-                                     llvm_package,
-                                     download_url,
-                                     temp_dir )
-  else:
-    raise AssertionError( 'Format not yet implemented: {}'.format(
-      download_data[ 'format' ] ) )
+  try:
+    if download_data[ 'format' ] == 'lzma':
+      package_dir = PrepareBundleLZMA( args.from_cache,
+                                       llvm_package,
+                                       download_url,
+                                       temp_dir )
+    elif download_data[ 'format' ] == 'nsis':
+      package_dir = PrepareBundleNSIS( args.from_cache,
+                                       llvm_package,
+                                       download_url,
+                                       temp_dir )
+    else:
+      raise AssertionError( 'Format not yet implemented: {}'.format(
+        download_data[ 'format' ] ) )
+  except requests.exceptions.HTTPError as error:
+    if error.response.status_code != 404:
+      raise
+    print( 'Cannot download {}'.format( llvm_package ) )
+    return
 
   MakeBundle( download_data[ 'files_to_copy' ],
               license_file_name,
@@ -415,7 +416,7 @@ def UpdateClangHeaders( args, temp_dir ):
   archive_name = src_name + '.tar.xz'
 
   compressed_data = Download(
-    'http://prereleases.llvm.org/{version}/rc{prerelease}/'
+    'https://prereleases.llvm.org/{version}/rc{prerelease}/'
     '{archive}'.format( version = args.version,
                         prerelease = args.release_candidate,
                         archive = archive_name ) )

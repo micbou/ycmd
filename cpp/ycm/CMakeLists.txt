@@ -30,31 +30,31 @@ if ( USE_CLANG_COMPLETER AND
      NOT PATH_TO_LLVM_ROOT AND
      NOT EXTERNAL_LIBCLANG_PATH )
 
-  set( CLANG_VERSION 6.0.0 )
+  set( CLANG_VERSION 7.0.0 )
 
   if ( APPLE )
-    set( LIBCLANG_DIRNAME "libclang-${CLANG_VERSION}-x86_64-apple-darwin" )
+    set( LIBCLANG_DIRNAME "libclang-${CLANG_VERSION}-rc1-x86_64-apple-darwin" )
     set( LIBCLANG_SHA256
-         "fd12532e3eb7b67cfede097134fc0a5b478c63759bcbe144ae6897f412ce2fe6" )
+         "73833182ffc1244950ae550097f37377424707365624030ec50dbf7ca2ecbb10" )
   elseif ( WIN32 )
     if( 64_BIT_PLATFORM )
-      set( LIBCLANG_DIRNAME "libclang-${CLANG_VERSION}-win64" )
+      set( LIBCLANG_DIRNAME "libclang-${CLANG_VERSION}-rc1-win64" )
       set( LIBCLANG_SHA256
-           "48c83977d582b31b879d3ee5db200c06cec33ee8136cc72fa1e99db10572a6ca" )
+           "0754b224651acc0f0a0ab744c4ba4f669764a8300fde75d34280e816952871ee" )
     else()
-      set( LIBCLANG_DIRNAME "libclang-${CLANG_VERSION}-win32" )
+      set( LIBCLANG_DIRNAME "libclang-${CLANG_VERSION}-rc1-win32" )
       set( LIBCLANG_SHA256
-           "f9c50ad64405ba19b62cd8951d339cc978f306c6138512790c6e2b005084960c" )
+           "358b9c736c3081001b6cbe3a64b6403ccd132cb8dfd84a0414a923577b2056c5" )
     endif()
   elseif ( SYSTEM_IS_FREEBSD )
     if ( 64_BIT_PLATFORM )
       set( LIBCLANG_DIRNAME
-           "libclang-${CLANG_VERSION}-amd64-unknown-freebsd-10" )
+           "libclang-${CLANG_VERSION}-rc1-amd64-unknown-freebsd11" )
       set( LIBCLANG_SHA256
-           "8283b3e03a820ab1411eec3ef3527e703df47732205241ae3efbe63261f300f3" )
+           "3ef2d82a1a5909ded370dca776752d932b6093fff8a0c4af8ac81bf16f7453d7" )
     else()
       set( LIBCLANG_DIRNAME
-           "libclang-${CLANG_VERSION}-i386-unknown-freebsd-10" )
+           "libclang-${CLANG_VERSION}-i386-unknown-freebsd11" )
       set( LIBCLANG_SHA256
            "e358f9ffa2356c24b61b41570abd9ad58e84a1f037c24b01d51b87dfaac422be" )
     endif()
@@ -69,9 +69,9 @@ if ( USE_CLANG_COMPLETER AND
   else()
     if ( 64_BIT_PLATFORM )
       set( LIBCLANG_DIRNAME
-           "libclang-${CLANG_VERSION}-x86_64-linux-gnu-ubuntu-14.04" )
+           "libclang-${CLANG_VERSION}-rc1-x86_64-unknown-linux-gnu" )
       set( LIBCLANG_SHA256
-           "a2f198aec6a6ea42b7ca2712295f73e1e3f912ca7579181f6d0339c04e8f9a0e" )
+           "acef711c217af17cf16dd82dc9f6e9904fb7d12f377397301e5e8683136d94b6" )
     else()
       message( FATAL_ERROR
         "No prebuilt Clang ${CLANG_VERSION} binaries for 32-bit Linux. "
@@ -353,22 +353,6 @@ if( LIBCLANG_TARGET )
       POST_BUILD
       COMMAND ${CMAKE_COMMAND} -E copy "${LIBCLANG_TARGET}" "$<TARGET_FILE_DIR:${PROJECT_NAME}>"
     )
-
-    if( NOT APPLE AND NOT WIN32 )
-      # When loading our library, the dynamic linker may look for
-      # libclang.so.x instead of libclang.so.x.y. Create the corresponding
-      # symlink.
-      get_filename_component( LIBCLANG_NAME ${LIBCLANG_TARGET} NAME )
-      string( REGEX REPLACE "([^.]+).([0-9]+).([0-9]+)$" "\\1.\\2"
-              LIBCLANG_SONAME ${LIBCLANG_NAME} )
-      add_custom_command(
-        TARGET ${PROJECT_NAME}
-        POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E create_symlink
-        "${LIBCLANG_NAME}"
-        "$<TARGET_FILE_DIR:${PROJECT_NAME}>/${LIBCLANG_SONAME}"
-      )
-    endif()
   endif()
 endif()
 
