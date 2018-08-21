@@ -72,7 +72,7 @@ class ClangCompleter( Completer ):
       if not ClangAvailableForFiletypes( file_data[ 'filetypes' ] ):
         continue
       contents = file_data[ 'contents' ]
-      if not contents or not filename:
+      if not contents or not filename or not file_data[ 'modified' ]:
         continue
 
       unsaved_file = ycm_core.UnsavedFile()

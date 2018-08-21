@@ -24,7 +24,7 @@ from __future__ import absolute_import
 # Not installing aliases from python-future; it's unreliable and slow.
 from builtins import *  # noqa
 
-from future.utils import iteritems
+from future.utils import iteritems, itervalues
 
 from ycmd.utils import ( ByteOffsetToCodepointOffset,
                          CodepointOffsetToByteOffset,
@@ -94,7 +94,9 @@ class RequestWrap( object ):
 
       'lines': ( self._CurrentLines, None ),
 
-      'extra_conf_data': ( self._GetExtraConfData, None )
+      'extra_conf_data': ( self._GetExtraConfData, None ),
+
+      'file_data': ( self._GetFileData, None )
     }
     self._cached_computed = {}
 
@@ -255,6 +257,15 @@ class RequestWrap( object ):
 
   def _GetExtraConfData( self ):
     return HashableDict( self._request.get( 'extra_conf_data', {} ) )
+
+
+  def _GetFileData( self ):
+    file_data = self._request[ 'file_data' ]
+    for data_for_file in itervalues( file_data ):
+      if 'modified' not in data_for_file:
+        # Assume a file is always modified if not specified.
+        data_for_file[ 'modified' ] = True
+    return file_data
 
 
 def CompletionStartColumn( line_value, column_num, filetype ):
