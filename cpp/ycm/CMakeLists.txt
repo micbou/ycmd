@@ -33,30 +33,30 @@ if ( USE_CLANG_COMPLETER AND
   set( CLANG_VERSION 7.0.0 )
 
   if ( APPLE )
-    set( LIBCLANG_DIRNAME "libclang-${CLANG_VERSION}-rc1-x86_64-apple-darwin" )
+    set( LIBCLANG_DIRNAME "libclang-${CLANG_VERSION}-rc2-x86_64-apple-darwin" )
     set( LIBCLANG_SHA256
-         "73833182ffc1244950ae550097f37377424707365624030ec50dbf7ca2ecbb10" )
+         "9c047009d5e272e82af65a96c1230f4413f8d60b17f7150137c89a10bc821f36" )
   elseif ( WIN32 )
     if( 64_BIT_PLATFORM )
-      set( LIBCLANG_DIRNAME "libclang-${CLANG_VERSION}-rc1-win64" )
+      set( LIBCLANG_DIRNAME "libclang-${CLANG_VERSION}-rc2-win64" )
       set( LIBCLANG_SHA256
-           "0754b224651acc0f0a0ab744c4ba4f669764a8300fde75d34280e816952871ee" )
+           "3dccaa9b3aba412691fa4703379afe84a0294c6df8da8f5b177b52a1984555ed" )
     else()
-      set( LIBCLANG_DIRNAME "libclang-${CLANG_VERSION}-rc1-win32" )
+      set( LIBCLANG_DIRNAME "libclang-${CLANG_VERSION}-rc2-win32" )
       set( LIBCLANG_SHA256
-           "358b9c736c3081001b6cbe3a64b6403ccd132cb8dfd84a0414a923577b2056c5" )
+           "ba3cfd3dd45579348c0e30e606112bbc85352c9c34e7eca4e85545830f69b33c" )
     endif()
   elseif ( SYSTEM_IS_FREEBSD )
     if ( 64_BIT_PLATFORM )
       set( LIBCLANG_DIRNAME
-           "libclang-${CLANG_VERSION}-rc1-amd64-unknown-freebsd11" )
+           "libclang-${CLANG_VERSION}-rc2-amd64-unknown-freebsd11" )
       set( LIBCLANG_SHA256
-           "3ef2d82a1a5909ded370dca776752d932b6093fff8a0c4af8ac81bf16f7453d7" )
+           "86c33b0b7414768b231768168766b68712c163d81899caea6c2aa3c0252805c9" )
     else()
       set( LIBCLANG_DIRNAME
-           "libclang-${CLANG_VERSION}-i386-unknown-freebsd11" )
+           "libclang-${CLANG_VERSION}-rc2-i386-unknown-freebsd11" )
       set( LIBCLANG_SHA256
-           "e358f9ffa2356c24b61b41570abd9ad58e84a1f037c24b01d51b87dfaac422be" )
+           "5ac06654bae50d9ee2bd55ba94bf6f3995cada8c570d2c020963226169507aed" )
     endif()
   elseif ( CMAKE_SYSTEM_PROCESSOR MATCHES "^(aarch64.*|AARCH64.*)" )
     set( LIBCLANG_DIRNAME "libclang-${CLANG_VERSION}-aarch64-linux-gnu" )
@@ -69,9 +69,9 @@ if ( USE_CLANG_COMPLETER AND
   else()
     if ( 64_BIT_PLATFORM )
       set( LIBCLANG_DIRNAME
-           "libclang-${CLANG_VERSION}-rc1-x86_64-unknown-linux-gnu" )
+           "libclang-${CLANG_VERSION}-rc2-x86_64-unknown-linux-gnu" )
       set( LIBCLANG_SHA256
-           "acef711c217af17cf16dd82dc9f6e9904fb7d12f377397301e5e8683136d94b6" )
+           "c66443ac42263daae3306e3ec9f084f6c61932dc993f4520eab386a320fc6363" )
     else()
       message( FATAL_ERROR
         "No prebuilt Clang ${CLANG_VERSION} binaries for 32-bit Linux. "
