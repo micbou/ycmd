@@ -437,7 +437,7 @@ class JavaCompleter( language_server_completer.LanguageServerCompleter ):
 
     module = extra_conf_store.ModuleForSourceFile(
         request_data[ 'filepath' ] )
-    settings = self._GetSettings( module, request_data[ 'client_data' ] )
+    settings = self._GetSettings( module, request_data[ 'extra_conf_data' ] )
     jdtls_setttings = settings.get( 'jdt.ls' )
     self.SendInitialize( request_data, jdtls_setttings )
 
