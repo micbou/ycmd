@@ -1200,7 +1200,7 @@ class LanguageServerCompleter( Completer ):
     return os.path.dirname( request_data[ 'filepath' ] )
 
 
-  def SendInitialize( self, request_data, lsp_config ):
+  def SendInitialize( self, request_data, lsp_config = {} ):
     """Sends the initialize request asynchronously.
     This must be called immediately after establishing the connection with the
     language server. Implementations must not issue further requests to the
@@ -1219,7 +1219,7 @@ class LanguageServerCompleter( Completer ):
         if message is None:
           return
 
-        self._HandleInitializeInPollThread( message )
+        self._HandleInitializeInPollThread( message, lsp_config = lsp_config )
 
       self._initialize_response = self.GetConnection().GetResponseAsync(
         request_id,
@@ -1227,7 +1227,7 @@ class LanguageServerCompleter( Completer ):
         response_handler )
 
 
-  def _HandleInitializeInPollThread( self, response ):
+  def _HandleInitializeInPollThread( self, response, lsp_config = {} ):
     """Called within the context of the LanguageServerConnection's message pump
     when the initialize request receives a response."""
     with self._server_info_mutex:
@@ -1263,10 +1263,9 @@ class LanguageServerCompleter( Completer ):
       # Some language servers require the use of didChangeConfiguration event,
       # even though it is not clear in the specification that it is mandatory,
       # nor when it should be sent.  VSCode sends it immediately after
-      # initialized notification, so we do the same. In future, we might
-      # support getting this config from ycm_extra_conf or the client, but for
-      # now, we send an empty object.
-      self.GetConnection().SendNotification( lsp.DidChangeConfiguration( {} ) )
+      # initialized notification, so we do the same.
+      self.GetConnection().SendNotification(
+          lsp.DidChangeConfiguration( lsp_config ) )
 
       # Notify the other threads that we have completed the initialize exchange.
       self._initialize_response = None

@@ -270,7 +270,7 @@ class JavaCompleter( language_server_completer.LanguageServerCompleter ):
       settings = self._GetSettings( module, request_data[ 'extra_conf_data' ] )
       self._jdtls_setttings = settings.get( 'jdt.ls' )
 
-      self._StartServer( request_data, jdtls_setttings = self._jdtls_setttings )
+      self._StartServer( request_data )
 
       return super( JavaCompleter, self ).OnFileReadyToParse( request_data )
 
@@ -332,7 +332,7 @@ class JavaCompleter( language_server_completer.LanguageServerCompleter ):
   def _RestartServer( self, request_data ):
     with self._server_state_mutex:
       self._StopServer()
-      self._StartServer( request_data, jdtls_setttings = self._jdtls_setttings )
+      self._StartServer( request_data )
 
 
   def _OpenProject( self, request_data, args ):
@@ -353,9 +353,7 @@ class JavaCompleter( language_server_completer.LanguageServerCompleter ):
 
     with self._server_state_mutex:
       self._StopServer()
-      self._StartServer( request_data,
-                         project_directory = project_directory,
-                         jdtls_setttings = self._jdtls_setttings )
+      self._StartServer( request_data, project_directory = project_directory )
 
 
   def _CleanUp( self ):
@@ -385,9 +383,7 @@ class JavaCompleter( language_server_completer.LanguageServerCompleter ):
     self.ServerReset()
 
 
-  def _StartServer( self, request_data,
-                    project_directory = None,
-                    jdtls_setttings = {} ):
+  def _StartServer( self, request_data, project_directory = None ):
     with self._server_state_mutex:
       if self._server_started:
         return
@@ -447,7 +443,7 @@ class JavaCompleter( language_server_completer.LanguageServerCompleter ):
 
     _logger.info( 'jdt.ls Language Server started' )
 
-    self.SendInitialize( request_data, jdtls_setttings )
+    self.SendInitialize( request_data, self._jdtls_setttings )
 
 
   def _GetSettings( self, module, client_data ):
