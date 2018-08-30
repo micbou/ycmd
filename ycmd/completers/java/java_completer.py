@@ -31,7 +31,7 @@ import tempfile
 import threading
 from subprocess import PIPE
 
-from ycmd import utils, responses
+from ycmd import extra_conf_store, responses, utils
 from ycmd.completers.language_server import language_server_completer
 from ycmd.completers.language_server import language_server_protocol as lsp
 
@@ -435,8 +435,9 @@ class JavaCompleter( language_server_completer.LanguageServerCompleter ):
 
     _logger.info( 'jdt.ls Language Server started' )
 
-    extra_conf = extra_conf_store.ModuleForSourceFile( request_data[ 'filepath' ] )
-    settings = self._GetSettings( module, client_data )
+    module = extra_conf_store.ModuleForSourceFile(
+        request_data[ 'filepath' ] )
+    settings = self._GetSettings( module, request_data[ 'client_data' ] )
     jdtls_setttings = settings.get( 'jdt.ls' )
     self.SendInitialize( request_data, jdtls_setttings )
 
