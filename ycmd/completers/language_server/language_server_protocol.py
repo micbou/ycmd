@@ -185,16 +185,14 @@ def BuildNotification( method, parameters ):
   } )
 
 
-def Initialize( request_id, project_directory ):
+def Initialize( request_id, project_directory, lsp_config ):
   """Build the Language Server initialize request"""
 
   return BuildRequest( request_id, 'initialize', {
     'processId': os.getpid(),
     'rootPath': project_directory,
     'rootUri': FilePathToUri( project_directory ),
-    'initializationOptions': {
-      # We don't currently support any server-specific options.
-    },
+    'initializationOptions': lsp_config,
     'capabilities': {
       # We don't currently support any of the client capabilities, so we don't
       # include anything in here.

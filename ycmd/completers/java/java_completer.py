@@ -435,7 +435,23 @@ class JavaCompleter( language_server_completer.LanguageServerCompleter ):
 
     _logger.info( 'jdt.ls Language Server started' )
 
-    self.SendInitialize( request_data )
+    extra_conf = extra_conf_store.ModuleForSourceFile( request_data[ 'filepath' ] )
+    settings = self._GetSettings( module, client_data )
+    jdtls_setttings = settings.get( 'jdt.ls' )
+    self.SendInitialize( request_data, jdtls_setttings )
+
+
+  def _GetSettings( self, module, client_data ):
+    if module:
+      if hasattr( module, 'Settings' ):
+        settings = module.Settings( language = 'java',
+                                    client_data = client_data )
+        if settings is not None:
+          return settings
+
+      _logger.debug( 'No Settings function defined in %s', module.__file__ )
+
+    return {}
 
 
   def _StopServer( self ):
