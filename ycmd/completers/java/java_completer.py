@@ -270,9 +270,9 @@ class JavaCompleter( language_server_completer.LanguageServerCompleter ):
       settings = self._GetSettings( module, request_data[ 'extra_conf_data' ] )
       self._jdtls_setttings = settings.get( 'jdt.ls' )
 
-      self._StartServer( request_data )
+    self._StartServer( request_data )
 
-      return super( JavaCompleter, self ).OnFileReadyToParse( request_data )
+    return super( JavaCompleter, self ).OnFileReadyToParse( request_data )
 
 
   def DebugInfo( self, request_data ):
