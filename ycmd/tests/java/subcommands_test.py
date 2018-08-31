@@ -38,7 +38,8 @@ from ycmd.utils import ReadFile
 from ycmd.completers.java.java_completer import NO_DOCUMENTATION_MESSAGE
 from ycmd.tests.java import ( DEFAULT_PROJECT_DIR,
                               PathToTestFile,
-                              SharedYcmd )
+                              SharedYcmd,
+                              IsolatedYcmd )
 from ycmd.tests.test_utils import ( BuildRequest,
                                     ChunkMatcher,
                                     CombineRequest,
@@ -1662,5 +1663,148 @@ def Subcommands_DifferentFileTypesUpdate_test( app ):
     'expect': {
       'response': requests.codes.ok,
       'data': has_entries( { 'fixits': empty() } ),
+    }
+  } )
+
+
+@WithRetry
+@IsolatedYcmd( { 'global_ycm_extra_conf':
+                 PathToTestFile( 'extra_confs', 'empty_extra_conf.py' ) } )
+def Subcommands_ExtraConf_Empty_test( app ):
+  filepath = PathToTestFile( 'simple_eclipse_project',
+                             'src',
+                             'com',
+                             'test',
+                             'TestLauncher.java' )
+  RunTest( app, {
+    'description': 'RefactorRename works when extra conf file is empty.',
+    'request': {
+      'command': 'RefactorRename',
+      'arguments': [ 'renamed_l' ],
+      'filepath': filepath,
+      'line_num': 28,
+      'column_num': 5,
+    },
+    'expect': {
+      'response': requests.codes.ok,
+      'data': has_entries( {
+        'fixits': contains( has_entries( {
+          'chunks': contains(
+              ChunkMatcher( 'renamed_l',
+                            LocationMatcher( filepath, 27, 18 ),
+                            LocationMatcher( filepath, 27, 19 ) ),
+              ChunkMatcher( 'renamed_l',
+                            LocationMatcher( filepath, 28, 5 ),
+                            LocationMatcher( filepath, 28, 6 ) ),
+          ),
+          'location': LocationMatcher( filepath, 28, 5 )
+        } ) )
+      } )
+    }
+  } )
+
+
+@WithRetry
+@IsolatedYcmd( { 'global_ycm_extra_conf':
+                 PathToTestFile( 'extra_confs',
+                                 'settings_empty_extra_conf.py' ) } )
+def Subcommands_ExtraConf_SettingsNone_test( app ):
+  filepath = PathToTestFile( 'simple_eclipse_project',
+                             'src',
+                             'com',
+                             'test',
+                             'TestLauncher.java' )
+  RunTest( app, {
+    'description': 'RefactorRename works when Settings returns `None`',
+    'request': {
+      'command': 'RefactorRename',
+      'arguments': [ 'renamed_l' ],
+      'filepath': filepath,
+      'line_num': 28,
+      'column_num': 5,
+    },
+    'expect': {
+      'response': requests.codes.ok,
+      'data': has_entries( {
+        'fixits': contains( has_entries( {
+          'chunks': contains(
+              ChunkMatcher( 'renamed_l',
+                            LocationMatcher( filepath, 27, 18 ),
+                            LocationMatcher( filepath, 27, 19 ) ),
+              ChunkMatcher( 'renamed_l',
+                            LocationMatcher( filepath, 28, 5 ),
+                            LocationMatcher( filepath, 28, 6 ) ),
+          ),
+          'location': LocationMatcher( filepath, 28, 5 )
+        } ) )
+      } )
+    }
+  } )
+
+
+@WithRetry
+@IsolatedYcmd( { 'global_ycm_extra_conf':
+                 PathToTestFile( 'extra_confs',
+                                 'settings_none_extra_conf.py' ) } )
+def Subcommands_ExtraConf_SettingsEmpty_test( app ):
+  filepath = PathToTestFile( 'simple_eclipse_project',
+                             'src',
+                             'com',
+                             'test',
+                             'TestLauncher.java' )
+  RunTest( app, {
+    'description': 'RefactorRename works when Settings returns {}',
+    'request': {
+      'command': 'RefactorRename',
+      'arguments': [ 'renamed_l' ],
+      'filepath': filepath,
+      'line_num': 28,
+      'column_num': 5,
+    },
+    'expect': {
+      'response': requests.codes.ok,
+      'data': has_entries( {
+        'fixits': contains( has_entries( {
+          'chunks': contains(
+              ChunkMatcher( 'renamed_l',
+                            LocationMatcher( filepath, 27, 18 ),
+                            LocationMatcher( filepath, 27, 19 ) ),
+              ChunkMatcher( 'renamed_l',
+                            LocationMatcher( filepath, 28, 5 ),
+                            LocationMatcher( filepath, 28, 6 ) ),
+          ),
+          'location': LocationMatcher( filepath, 28, 5 )
+        } ) )
+      } )
+    }
+  } )
+
+
+@WithRetry
+@IsolatedYcmd( { 'global_ycm_extra_conf':
+                 PathToTestFile( 'extra_confs', 'settings_extra_conf.py' ) } )
+def Subcommands_ExtraConf_SettingsValid_test( app ):
+  filepath = PathToTestFile( 'simple_eclipse_project',
+                             'src',
+                             'com',
+                             'test',
+                             'TestLauncher.java' )
+  RunTest( app, {
+    'description': 'RefactorRename is disabled in extra conf.',
+    'request': {
+      'command': 'RefactorRename',
+      'arguments': [ 'renamed_l' ],
+      'filepath': filepath,
+      'line_num': 28,
+      'column_num': 5,
+    },
+    'expect': {
+      'response': requests.codes.ok,
+      'data': has_entries( {
+        'fixits': contains( has_entries( {
+          'chunks': empty(),
+          'location': LocationMatcher( filepath, 28, 5 )
+        } ) )
+      } )
     }
   } )
