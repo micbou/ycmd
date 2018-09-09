@@ -330,7 +330,7 @@ def ServerManagement_OpenProject_RelativePathNoPath_test( app ):
 def ServerManagement_ProjectDetection_NoParent_test():
   with TemporaryTestDir() as tmp_dir:
 
-    @IsolatedYcmd
+    @IsolatedYcmd()
     def Test( app ):
       StartJavaCompleterServerInDirectory( app, tmp_dir )
 
