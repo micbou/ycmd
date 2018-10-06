@@ -22,8 +22,36 @@ include_directories( ${ycm_core_SOURCE_DIR} )
 
 add_executable( ${PROJECT_NAME} main.cpp )
 
+# Always use system libclang on macOS.
+# if ( APPLE )
+#   find_library( LIBCLANG_FAKE_TARGET
+#                 NAMES
+#                 clang
+#                 PATHS
+#                 /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib
+#                 /Library/Developer/CommandLineTools/usr/lib )
+# else()
+#   set( LIBCLANG_FAKE_TARGET ${LIBCLANG_TARGET} )
+# endif()
+
 target_link_libraries( ${PROJECT_NAME}
-                       ${LIBCLANG_TARGET} )
+                       ${LIBCLANG_FAKE_TARGET} )
+
+if ( EXTERNAL_LIBCLANG_PATH AND APPLE AND NOT USE_SYSTEM_LIBCLANG)
+  get_filename_component(EXTRA_LIB_PATH ${EXTERNAL_LIBCLANG_PATH} DIRECTORY)
+
+  set_target_properties(${PROJECT_NAME}
+    PROPERTIES LINK_FLAGS "-Wl,-rpath,${EXTRA_LIB_PATH}")
+
+  add_custom_command( TARGET ${PROJECT_NAME}
+                      POST_BUILD
+                      COMMAND install_name_tool
+                      "-change"
+                      "@rpath/libclang.dylib"
+                      "@loader_path/libclang.dylib"
+                      "$<TARGET_FILE:${PROJECT_NAME}>"
+                    )
+endif()
 
 # Build ycm_fake_clang in ycmd root folder.
 if ( MSVC )

@@ -90,7 +90,6 @@ PATH_TO_YCMD_DIR = os.path.abspath( os.path.dirname( ycm_core.__file__ ) )
 CLANG_RESOURCE_DIR = '-resource-dir=' + os.path.join( PATH_TO_YCMD_DIR,
                                                       'clang_includes' )
 
-REAL_CLANG_EXECUTABLE = FindExecutable( 'clang' )
 FAKE_CLANG_EXECUTABLE = GetExecutable( os.path.join( PATH_TO_YCMD_DIR,
                                                      'ycm_fake_clang' ) )
 
@@ -713,15 +712,13 @@ def _AddSystemHeaderPaths( flags, filename ):
   This is needed to provide completion of these headers in include statements
   as well as jumping to these headers."""
 
-  # Use Clang or the ycm_fake_clang executable to output the list of system
-  # header directories. If no executable is found, ycmd was not properly
-  # compiled so raise an error.
-  if REAL_CLANG_EXECUTABLE:
-    clang_command = [ REAL_CLANG_EXECUTABLE ]
-  elif FAKE_CLANG_EXECUTABLE:
-    clang_command = [ FAKE_CLANG_EXECUTABLE, CLANG_RESOURCE_DIR ]
-  else:
-    raise RuntimeError( 'No Clang executable found.' )
+  # Use the ycm_fake_clang executable to output the list of system header
+  # directories. If no executable is found, ycmd was not properly compiled so
+  # raise an error.
+  if not FAKE_CLANG_EXECUTABLE:
+    raise RuntimeError( 'ycm_fake_clang executable is missing.' )
+
+  clang_command = [ FAKE_CLANG_EXECUTABLE, CLANG_RESOURCE_DIR ]
 
   # Create a temporary file with the same file extension as the input one; Clang
   # deduces the language from the extension when the -x flag is not given.
