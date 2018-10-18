@@ -1353,6 +1353,27 @@ def AddSystemHeaderPaths_AssumeCppIfNoExtensionAndNoLanguageFlag_test():
 
 
 @patch( 'ycmd.completers.cpp.flags.REAL_CLANG_EXECUTABLE', None )
+def AddSystemHeaderPaths_OverrideClangCompilerPath_test():
+  class SafePopen( object ):
+    def __init__( self, args, **kwargs ):
+      pass
+
+    def communicate( self ):
+      return '', FAKE_CLANG_STDERR
+
+  with patch( 'ycmd.completers.cpp.flags.SafePopen', SafePopen ):
+    assert_that(
+      flags._AddSystemHeaderPaths( [ '-x', 'c++' ],
+                                   'test.cpp',
+                                   '/usr/bin/clang' ),
+      contains( '-x', 'c++',
+                '-isystem', os.path.abspath( '/path/to/include' ),
+                '-iframework', os.path.abspath( '/path/to/framework' ) )
+    )
+
+
+
+@patch( 'ycmd.completers.cpp.flags.REAL_CLANG_EXECUTABLE', None )
 @patch( 'ycmd.completers.cpp.flags.FAKE_CLANG_EXECUTABLE', None )
 def AddSystemHeaderPaths_NoClangExecutable_test():
   assert_that(
