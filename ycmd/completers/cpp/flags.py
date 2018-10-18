@@ -173,7 +173,9 @@ class Flags( object ):
       return [], filename
 
     if add_extra_clang_flags:
-      flags = _AddSystemHeaderPaths( flags, filename )
+      flags = _AddSystemHeaderPaths( flags,
+                                     filename,
+                                     results.get( 'compiler_path' ) )
       flags += self.extra_clang_flags
 
     sanitized_flags = PrepareFlagsForClang( flags,
@@ -246,10 +248,19 @@ class Flags( object ):
     # could be executing this method in parallel.
     self.file_directory_heuristic_map.setdefault( file_dir, compilation_info )
 
+    compiler_path = compilation_info.compiler_flags_[ 0 ]
+    for index, flag in enumerate( compilation_info.compiler_flags_ ):
+      if flag.startswith( '-' ):
+        compiler_path = ( compilation_info.compiler_flags_[ index - 1 ]
+                          if index > 0 else
+                          compilation_info.compiler_flags_[ 0 ] )
+        break
+
     return {
       'flags': _MakeRelativePathsInFlagsAbsolute(
         compilation_info.compiler_flags_,
         compilation_info.compiler_working_dir_ ),
+      'compiler_path': compiler_path,
     }
 
 
@@ -708,7 +719,7 @@ def _GetSystemFlags( flags ):
   return system_flags, no_language_flag
 
 
-def _AddSystemHeaderPaths( flags, filename ):
+def _AddSystemHeaderPaths( flags, filename, compiler_path = None ):
   """Add the system header directories to the list of flags given by the user.
   This is needed to provide completion of these headers in include statements
   as well as jumping to these headers."""
@@ -716,7 +727,9 @@ def _AddSystemHeaderPaths( flags, filename ):
   # Use Clang or the ycm_fake_clang executable to output the list of system
   # header directories. If no executable is found, ycmd was not properly
   # compiled so raise an error.
-  if REAL_CLANG_EXECUTABLE:
+  if compiler_path:
+    clang_command = [ compiler_path ]
+  elif REAL_CLANG_EXECUTABLE:
     clang_command = [ REAL_CLANG_EXECUTABLE ]
   elif FAKE_CLANG_EXECUTABLE:
     clang_command = [ FAKE_CLANG_EXECUTABLE, CLANG_RESOURCE_DIR ]
