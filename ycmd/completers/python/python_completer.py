@@ -89,22 +89,24 @@ class PythonCompleter( Completer ):
 
 
   def _EnvironmentForInterpreterPath( self, interpreter_path ):
-    if interpreter_path:
-      resolved_interpreter_path = FindExecutable(
-        ExpandVariablesInPath( interpreter_path ) )
-      if not resolved_interpreter_path:
-        raise RuntimeError( 'Cannot find Python interpreter path {}.'.format(
-          interpreter_path ) )
-      interpreter_path = os.path.normpath( resolved_interpreter_path )
+    # If no Python is specified by the user, attempt to find Python in the PATH.
+    if not interpreter_path:
+      interpreter_path = 'python'
+
+    resolved_interpreter_path = FindExecutable(
+      ExpandVariablesInPath( interpreter_path ) )
+    if not resolved_interpreter_path:
+      raise RuntimeError( 'Cannot find Python interpreter path {}.'.format(
+        interpreter_path ) )
+    interpreter_path = os.path.normpath( resolved_interpreter_path )
 
     try:
       return self._environment_for_interpreter_path[ interpreter_path ]
     except KeyError:
       pass
 
-    # Assume paths specified by the user are safe.
-    environment = ( jedi.get_default_environment() if not interpreter_path else
-                    jedi.create_environment( interpreter_path, safe = False ) )
+    # Always assume that the Python found is safe.
+    environment = jedi.create_environment( interpreter_path, safe = False )
     self._environment_for_interpreter_path[ interpreter_path ] = environment
     return environment
 

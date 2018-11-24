@@ -31,7 +31,11 @@ import traceback
 from bottle import request
 
 import ycm_core
-from ycmd import extra_conf_store, hmac_plugin, server_state, user_options_store
+from ycmd import ( __version__,
+                   extra_conf_store,
+                   hmac_plugin,
+                   server_state,
+                   user_options_store )
 from ycmd.responses import ( BuildExceptionResponse, BuildCompletionResponse,
                              UnknownExtraConf )
 from ycmd.request_wrap import RequestWrap
@@ -214,6 +218,8 @@ def DebugInfo():
     is_loaded = False
 
   response = {
+    'executable': sys.executable,
+    'version': __version__,
     'python': {
       'executable': sys.executable,
       'version': platform.python_version()

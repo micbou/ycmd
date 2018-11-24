@@ -7,7 +7,9 @@ if %msvc% == 2013 (
   set msvc=15
 )
 
-if defined YCM_BENCHMARK (
+if defined YCM_PACKAGE (
+  python build.py --clang-completer --cs-completer --go-completer --java-completer --rust-completer --ts-completer --msvc %msvc%
+) else if defined YCM_BENCHMARK (
   python benchmark.py --msvc %msvc%
 ) else (
   python run_tests.py --msvc %msvc%

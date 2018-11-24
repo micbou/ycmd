@@ -26,7 +26,12 @@ import os.path as p
 import re
 import sys
 
-ROOT_DIR = p.normpath( p.join( p.dirname( __file__ ), '..' ) )
+BUNDLED = getattr( sys, 'frozen', False )
+
+if BUNDLED:
+  ROOT_DIR = sys._MEIPASS
+else:
+  ROOT_DIR = p.abspath( p.join( p.dirname( __file__ ), '..' ) )
 DIR_OF_THIRD_PARTY = p.join( ROOT_DIR, 'third_party' )
 PYTHON_STDLIB_ZIP_REGEX = re.compile( 'python[23][0-9]\\.zip' )
 
@@ -60,8 +65,9 @@ def SetUpPythonPath():
   # around these issues, we place the python-future just after the Python
   # standard library so that its modules can be overridden by standard
   # modules but not by installed packages.
-  sys.path.insert( GetStandardLibraryIndexInSysPath() + 1,
-                   p.join( DIR_OF_THIRD_PARTY, 'python-future', 'src' ) )
+  if not BUNDLED:
+    sys.path.insert( GetStandardLibraryIndexInSysPath() + 1,
+                     p.join( DIR_OF_THIRD_PARTY, 'python-future', 'src' ) )
   sys.path[ 0:0 ] = [ p.join( ROOT_DIR ),
                       p.join( DIR_OF_THIRD_PARTY, 'bottle' ),
                       p.join( DIR_OF_THIRD_PARTY, 'cregex',

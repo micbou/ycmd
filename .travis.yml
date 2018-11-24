@@ -1,15 +1,45 @@
 language: generic
 dist: trusty
 sudo: false
+if: tag != dev
 before_install:
   - git submodule update --init --recursive
 install:
-  # source because it sets up env vars on some platforms
+  # source because it sets up environment variables.
   - source ci/travis/travis_install.sh
 script:
   - ci/travis/travis_script.sh
 after_success:
   - if [ "${COVERAGE}" == "true" ]; then bash <(curl -s https://codecov.io/bash); fi
+  # source because it sets up environment variables.
+  - source ci/travis/travis_package.sh
+deploy:
+  - provider: releases
+    api_key:
+      secure: "RuP76GScSjjeaB2suThjZ8ugqTSIqYYfNQvnyJBg+lah4P+Ls+Kk4YC/PVgap9ECjOG8D/UTVCHnYGxDepxcrbkehzcqXCpMWcBEXIBP70r6xAeHn+FGDlmNC132rFrzuq7DOQmlvLnUuiZCzLDhUYsMrrf1+JphHqy3XZXRqJo="
+    file: ycmd-linux-64.tar.gz
+    # TODO: get the tag programmatically from ycmd/__init__.py.
+    name: ycmd 0.3.0-dev
+    body: ycmd development package
+    skip_cleanup: true
+    prerelease: true
+    overwrite: true
+    on:
+      branch: release
+      condition: $YCM_PACKAGE = true
+      condition: $YCM_RELEASE_DEPLOYMENT = false
+  - provider: releases
+    api_key:
+      secure: "RuP76GScSjjeaB2suThjZ8ugqTSIqYYfNQvnyJBg+lah4P+Ls+Kk4YC/PVgap9ECjOG8D/UTVCHnYGxDepxcrbkehzcqXCpMWcBEXIBP70r6xAeHn+FGDlmNC132rFrzuq7DOQmlvLnUuiZCzLDhUYsMrrf1+JphHqy3XZXRqJo="
+    file: ycmd-linux-64.tar.gz
+    name: ycmd ${TRAVIS_TAG}
+    body: ycmd release package
+    skip_cleanup: true
+    overwrite: true
+    on:
+      all_branches: true
+      condition: $YCM_PACKAGE = true
+      condition: $YCM_RELEASE_DEPLOYMENT = true
 env:
   global:
     # Travis can run out of RAM, so we need to be careful here.
@@ -17,12 +47,22 @@ env:
     - COVERAGE=true
     - USE_CLANG_COMPLETER=true
   matrix:
-    - YCMD_PYTHON_VERSION=2.7 USE_CLANG_COMPLETER=false
-    - YCMD_PYTHON_VERSION=2.7
-    - YCMD_PYTHON_VERSION=3.4
-    - YCMD_PYTHON_VERSION=3.4 YCM_COMPILER=clang
-    - YCMD_PYTHON_VERSION=3.4 YCM_BENCHMARK=true COVERAGE=false
-    - YCMD_PYTHON_VERSION=3.4 YCM_CLANG_TIDY=true COVERAGE=false YCM_CORES=1
+      - YCMD_PYTHON_VERSION=2.7 USE_CLANG_COMPLETER=false
+      #    - YCMD_PYTHON_VERSION=2.7
+      #    - YCMD_PYTHON_VERSION=3.4
+      #    - YCMD_PYTHON_VERSION=3.4 YCM_COMPILER=clang
+      #    - YCMD_PYTHON_VERSION=3.4 YCM_BENCHMARK=true COVERAGE=false
+      #    - YCMD_PYTHON_VERSION=3.4 YCM_CLANG_TIDY=true COVERAGE=false YCM_CORES=1
+      # - YCMD_PYTHON_VERSION=3.4 YCM_PACKAGE=true COVERAGE=false
+jobs:
+  include:
+    - if: branch = release
+      env:
+        - YCM_CORES=3
+        - COVERAGE=true
+        - USE_CLANG_COMPLETER=true
+        - YCMD_PYTHON_VERSION=3.4
+        - YCM_PACKAGE=true
 addons:
   # If this doesn't make much sense to you, see the travis docs:
   #    https://docs.travis-ci.com/user/migrating-from-legacy/

@@ -76,3 +76,7 @@ third_party/tsserver
 
 # clangd local installation
 third_party/clangd
+
+# Packaging
+build
+dist
