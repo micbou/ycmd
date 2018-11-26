@@ -3,24 +3,24 @@ environment:
   USE_CLANG_COMPLETER: true
   COVERAGE: true
   matrix:
-  #- APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2015
-  #  arch: 64
-  #  python: 37
-  #- APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2017
-  #  arch: 32
-  #  python: 37
-  ## We only test Python 2.7 with MSVC 15 on 64-bit.
-  #- APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2017
-  #  arch: 64
-  #  python: 27
-  #- APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2017
-  #  arch: 64
-  #  python: 37
-  #- APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2017
-  #  arch: 64
-  #  python: 37
-  #  YCM_BENCHMARK: true
-  #  COVERAGE: false
+      #  - APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2015
+      #    arch: 64
+      #    python: 37
+      #  - APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2017
+      #    arch: 32
+      #    python: 37
+      #  # We only test Python 2.7 with MSVC 15 on 64-bit.
+      #  - APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2017
+      #    arch: 64
+      #    python: 27
+      #  - APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2017
+      #    arch: 64
+      #    python: 37
+      #  - APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2017
+      #    arch: 64
+      #    python: 37
+      #    YCM_BENCHMARK: true
+      #    COVERAGE: false
   - APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2017
     arch: 32
     python: 37
@@ -46,12 +46,11 @@ after_build:
   - ci\appveyor\appveyor_package.bat
 deploy:
   - provider: GitHub
-    tag: dev
-    # TODO: get the tag programmatically from ycmd/__init__.py.
-    release: ycmd 0.3.0-dev
-    description: 'ycmd development package'
     auth_token:
       secure: B5NBpVx7OIYAAGGtzztXKNmx55oWDwLTcSuG7mq6M1r9NVWGQFWOoO16s7r7zdHR
+    tag: dev
+    release: ycmd $(YCMD_VERSION)
+    description: ycmd development package
     artifact: ycmd
     draft: false
     prerelease: true
@@ -61,11 +60,11 @@ deploy:
       YCM_PACKAGE: true
       APPVEYOR_REPO_TAG: false
   - provider: GitHub
-    tag: $(appveyor_repo_tag_name)
-    release: ycmd $(appveyor_repo_tag_name)
-    description: 'ycmd release package'
     auth_token:
       secure: B5NBpVx7OIYAAGGtzztXKNmx55oWDwLTcSuG7mq6M1r9NVWGQFWOoO16s7r7zdHR
+    tag: $(APPVEYOR_REPO_TAG_NAME)
+    release: ycmd $(APPVEYOR_REPO_TAG_NAME)
+    description: ycmd release package
     artifact: ycmd
     draft: false
     force_update: true

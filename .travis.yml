@@ -1,68 +1,61 @@
+aliases:
+  - &run-tests-and-upload-coverage
+    script: ./run_tests.py --coverage
+    after_success: bash <(curl -s https://codecov.io/bash)
+  - &deploy-on-github
+    provider: releases
+    api_key: $YCMD_GITHUB_KEY
+    name: ycmd $YCMD_VERSION
+    file: ycmd-linux-64.tar.gz
+    skip_cleanup: true
+    overwrite: true
 language: generic
 dist: trusty
 sudo: false
 if: tag != dev
-before_install:
-  - git submodule update --init --recursive
-install:
-  # source because it sets up environment variables.
-  - source ci/travis/travis_install.sh
-script:
-  - ci/travis/travis_script.sh
-after_success:
-  - if [ "${COVERAGE}" == "true" ]; then bash <(curl -s https://codecov.io/bash); fi
-  # source because it sets up environment variables.
-  - source ci/travis/travis_package.sh
-deploy:
-  - provider: releases
-    api_key:
-      secure: "RuP76GScSjjeaB2suThjZ8ugqTSIqYYfNQvnyJBg+lah4P+Ls+Kk4YC/PVgap9ECjOG8D/UTVCHnYGxDepxcrbkehzcqXCpMWcBEXIBP70r6xAeHn+FGDlmNC132rFrzuq7DOQmlvLnUuiZCzLDhUYsMrrf1+JphHqy3XZXRqJo="
-    file: ycmd-linux-64.tar.gz
-    # TODO: get the tag programmatically from ycmd/__init__.py.
-    name: ycmd 0.3.0-dev
-    body: ycmd development package
-    skip_cleanup: true
-    prerelease: true
-    overwrite: true
-    on:
-      branch: release
-      condition: $YCM_PACKAGE = true
-      condition: $YCM_RELEASE_DEPLOYMENT = false
-  - provider: releases
-    api_key:
-      secure: "RuP76GScSjjeaB2suThjZ8ugqTSIqYYfNQvnyJBg+lah4P+Ls+Kk4YC/PVgap9ECjOG8D/UTVCHnYGxDepxcrbkehzcqXCpMWcBEXIBP70r6xAeHn+FGDlmNC132rFrzuq7DOQmlvLnUuiZCzLDhUYsMrrf1+JphHqy3XZXRqJo="
-    file: ycmd-linux-64.tar.gz
-    name: ycmd ${TRAVIS_TAG}
-    body: ycmd release package
-    skip_cleanup: true
-    overwrite: true
-    on:
-      all_branches: true
-      condition: $YCM_PACKAGE = true
-      condition: $YCM_RELEASE_DEPLOYMENT = true
 env:
   global:
     # Travis can run out of RAM, so we need to be careful here.
     - YCM_CORES=3
-    - COVERAGE=true
+    - YCMD_PYTHON_VERSION=3.4
     - USE_CLANG_COMPLETER=true
-  matrix:
-      - YCMD_PYTHON_VERSION=2.7 USE_CLANG_COMPLETER=false
-      #    - YCMD_PYTHON_VERSION=2.7
-      #    - YCMD_PYTHON_VERSION=3.4
-      #    - YCMD_PYTHON_VERSION=3.4 YCM_COMPILER=clang
-      #    - YCMD_PYTHON_VERSION=3.4 YCM_BENCHMARK=true COVERAGE=false
-      #    - YCMD_PYTHON_VERSION=3.4 YCM_CLANG_TIDY=true COVERAGE=false YCM_CORES=1
-      # - YCMD_PYTHON_VERSION=3.4 YCM_PACKAGE=true COVERAGE=false
+    - secure: "Qv99dgRUUr/RwleCc6RHD+/bEWy5JVp9Kjf1Zk6bIN0F2VKXg2PtSBmnIeNJKYK63aRUjfIADAu5amUiaO4AxOlYCYz6814hFvX5TDLD4pTJbxMaQ0qRgLdn91i7FyubYc6RoVf8vFdy8fBNCDXdw4SwNcih4MYRlBYyY+Wf2tc="
+before_install: git submodule update --init --recursive
+install: source ci/travis/travis_install.sh
 jobs:
   include:
-    - if: branch = release
-      env:
-        - YCM_CORES=3
-        - COVERAGE=true
-        - USE_CLANG_COMPLETER=true
-        - YCMD_PYTHON_VERSION=3.4
-        - YCM_PACKAGE=true
+      #    - name: Python 2.7, no Clang completer
+      #      env: YCMD_PYTHON_VERSION=2.7 USE_CLANG_COMPLETER=false
+      #      <<: *run-tests-and-upload-coverage
+      #    - name: Python 2.7
+      #      env: YCMD_PYTHON_VERSION=2.7
+      #      <<: *run-tests-and-upload-coverage
+      #    - name: Python 3.4
+      #      <<: *run-tests-and-upload-coverage
+      #    - name: Python 3.4, Clang compiler
+      #      env: YCM_COMPILER=clang
+      #      <<: *run-tests-and-upload-coverage
+      #    - name: Benchmark
+      #      script: ./benchmark.py
+      #    - name: C++ linter
+      #      env: YCM_CORES=1
+      #      script: ./build.py --clang-completer --clang-tidy --no-regex
+    - name: Linux 64-bit deployment
+      if: branch = release or tag is present
+      script: ./build.py --clang-completer --cs-completer --go-completer --java-completer --rust-completer --ts-completer
+      after_success: source ci/travis/travis_package.sh
+      deploy:
+        - <<: *deploy-on-github
+          body: ycmd development package
+          prerelease: true
+          on:
+            all_branches: true
+            condition: $YCM_RELEASE_DEPLOYMENT = false
+        - <<: *deploy-on-github
+          body: ycmd release package
+          on:
+            all_branches: true
+            condition: $YCM_RELEASE_DEPLOYMENT = true
 addons:
   # If this doesn't make much sense to you, see the travis docs:
   #    https://docs.travis-ci.com/user/migrating-from-legacy/

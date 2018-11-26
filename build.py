@@ -687,10 +687,7 @@ def EnableRustCompleter( args ):
 
   os.chdir( p.join( DIR_OF_THIRD_PARTY, 'racerd' ) )
   command_line = [ cargo, 'build' ]
-  # We don't use the --release flag on CI services (except when packaging)
-  # because it makes building racerd 2.5x slower and we don't care about the
-  # speed of the produced racerd.
-  if not OnCiService() or 'YCM_PACKAGE' in os.environ:
+  if not args.enable_debug:
     command_line.append( '--release' )
   CheckCall( command_line,
              quiet = args.quiet,
