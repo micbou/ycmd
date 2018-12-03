@@ -400,13 +400,30 @@ def UpdateClangHeaders( args, temp_dir ):
 
   print( 'Updating Clang headers...' )
   includes_dir = os.path.join(
-    DIR_OF_THIS_SCRIPT, 'clang_includes', 'include' )
+    DIR_OF_THIS_SCRIPT, 'clang_includes', 'lib', 'clang', 'version', 'include' )
   Overwrite( os.path.join( src, 'lib', 'Headers' ), includes_dir )
   os.remove( os.path.join( includes_dir, 'CMakeLists.txt' ) )
 
   Overwrite( os.path.join( src, 'include', 'clang-c' ),
              os.path.join( DIR_OF_THIS_SCRIPT, 'cpp', 'llvm', 'include',
                            'clang-c' ) )
+
+
+def UpdateCppHeaders( args, temp_dir ):
+  src_name = 'libcxx-{version}.src'.format( version = args.version )
+  archive_name = src_name + '.tar.xz'
+
+  compressed_data = Download( 'https://releases.llvm.org/{version}/'
+                              '{archive}'.format( version = args.version,
+                                                  archive = archive_name ) )
+  print( 'Extracting {}'.format( archive_name ) )
+  src = ExtractLZMA( compressed_data, temp_dir )
+
+  print( 'Updating C++ headers...' )
+  includes_dir = os.path.join(
+    DIR_OF_THIS_SCRIPT, 'clang_includes', 'include', 'c++', 'v1' )
+  Overwrite( os.path.join( src, 'include' ), includes_dir )
+  os.remove( os.path.join( includes_dir, 'CMakeLists.txt' ) )
 
 
 def Main():
@@ -422,6 +439,7 @@ def Main():
         BundleAndUpload( args, temp_dir, output_dir, os_name, download_data,
                          license_file_name, hashes )
       UpdateClangHeaders( args, temp_dir )
+      UpdateCppHeaders( args, temp_dir )
   finally:
     if not args.output_dir:
       shutil.rmtree( output_dir )
