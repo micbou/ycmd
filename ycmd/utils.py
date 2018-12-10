@@ -37,7 +37,6 @@ import time
 import threading
 
 LOGGER = logging.getLogger( 'ycmd' )
-BUNDLED = getattr( sys, 'frozen', False )
 ROOT_DIR = os.path.normpath( os.path.join( os.path.dirname( __file__ ), '..' ) )
 DIR_OF_THIRD_PARTY = os.path.join( ROOT_DIR, 'third_party' )
 LIBCLANG_DIR = os.path.join( DIR_OF_THIRD_PARTY, 'clang', 'lib' )
@@ -660,5 +659,4 @@ def GetClangResourceDir():
   raise RuntimeError( 'Cannot find Clang resource directory.' )
 
 
-if BUNDLED:
-  CLANG_RESOURCE_DIR = GetClangResourceDir()
+CLANG_RESOURCE_DIR = GetClangResourceDir()

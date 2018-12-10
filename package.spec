@@ -32,16 +32,6 @@ a = Analysis(
     ( 'COPYING.txt',           '.' ),
     ( 'CORE_VERSION',          '.' ),
     ( 'default_settings.json', '.' ),
-    # YCM dependencies
-    # TODO: remove them.
-    ( 'ycmd/completers/completer.py',       'ycm_deps/ycmd/completers' ),
-    ( 'ycmd/completers/completer_utils.py', 'ycm_deps/ycmd/completers' ),
-    ( 'ycmd/hmac_utils.py',                 'ycm_deps/ycmd' ),
-    ( 'ycmd/identifier_utils.py',           'ycm_deps/ycmd' ),
-    ( 'ycmd/request_wrap.py',               'ycm_deps/ycmd' ),
-    ( 'ycmd/request_validation.py',         'ycm_deps/ycmd' ),
-    ( 'ycmd/responses.py',                  'ycm_deps/ycmd' ),
-    ( 'ycmd/utils.py',                      'ycm_deps/ycmd' ),
     # C/C++
     ( 'third_party/clang/lib', 'third_party/clang/lib' ),
     # C#

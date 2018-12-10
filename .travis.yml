@@ -41,7 +41,7 @@ jobs:
       #      env: YCM_CORES=1
       #      script: ./build.py --clang-completer --clang-tidy --no-regex
     - name: Linux 64-bit deployment
-      if: branch = release or tag is present
+      if: branch = decouple-ycmd-release or tag is present
       script: ./build.py --clang-completer --cs-completer --go-completer --java-completer --rust-completer --ts-completer
       after_success: source ci/travis/travis_package.sh
       deploy:

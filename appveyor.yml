@@ -56,7 +56,7 @@ deploy:
     prerelease: true
     force_update: true
     on:
-      branch: release
+      branch: decouple-ycmd-release
       YCM_PACKAGE: true
       APPVEYOR_REPO_TAG: false
   - provider: GitHub
