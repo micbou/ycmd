@@ -18,14 +18,17 @@ a = Analysis(
     'third_party/bottle',
     'third_party/cregex/regex_3',
     'third_party/frozendict',
-    'third_party/jedi',
-    'third_party/parso',
-    'third_party/requests',
+    'third_party/jedi_deps/jedi',
+    'third_party/jedi_deps/parso',
+    'third_party/requests_deps/certifi',
+    'third_party/requests_deps/chardet',
+    'third_party/requests_deps/idna',
+    'third_party/requests_deps/requests',
+    'third_party/requests_deps/urllib3/src',
     'third_party/waitress'
   ],
   binaries = [],
   datas = [
-    ( 'clang_includes',        'clang_includes' ),
     ( 'COPYING.txt',           '.' ),
     ( 'CORE_VERSION',          '.' ),
     ( 'default_settings.json', '.' ),
@@ -39,6 +42,8 @@ a = Analysis(
     ( 'ycmd/request_validation.py',         'ycm_deps/ycmd' ),
     ( 'ycmd/responses.py',                  'ycm_deps/ycmd' ),
     ( 'ycmd/utils.py',                      'ycm_deps/ycmd' ),
+    # C/C++
+    ( 'third_party/clang/lib', 'third_party/clang/lib' ),
     # C#
     ( 'third_party/OmniSharpServer/OmniSharp/bin/Release',
       'third_party/OmniSharpServer/OmniSharp/bin/Release' ),
@@ -53,8 +58,8 @@ a = Analysis(
     # JavaScript and TypeScript
     ( 'third_party/tsserver', 'third_party/tsserver' ),
     # Python
-    ( 'third_party/jedi/jedi', 'jedi' ),
-    ( 'third_party/parso/parso', 'parso' ),
+    ( 'third_party/jedi_deps/jedi',  'jedi' ),
+    ( 'third_party/jedi_deps/parso', 'parso' ),
     # Rust
     ( Exe( 'third_party/racerd/target/release/racerd' ),
       'third_party/racerd/target/release' )
