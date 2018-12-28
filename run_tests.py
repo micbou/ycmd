@@ -71,6 +71,7 @@ def RunFlake8():
 #  - no aliases.
 SIMPLE_COMPLETERS = [
   'clangd',
+  'ruby',
   'yaml',
 ]
 
