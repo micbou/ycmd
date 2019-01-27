@@ -127,6 +127,14 @@ def GetCompletions():
                                errors = errors ) )
 
 
+@app.post( '/should_use_now' )
+def ShouldUseNow():
+  LOGGER.info( 'Received should use now request' )
+  request_data = RequestWrap( request.json )
+  completer = _server_state.GetBasicCompleter()
+  return _JsonResponse( completer.ShouldUseNow( request_data ) )
+
+
 @app.post( '/filter_and_sort_candidates' )
 def FilterAndSortCandidates():
   LOGGER.info( 'Received filter & sort request' )
