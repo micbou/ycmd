@@ -250,6 +250,9 @@ def Initialize( request_id, project_directory, settings ):
           'completionItemKind': {
             # ITEM_KIND list is 1-based.
             'valueSet': list( range( 1, len( ITEM_KIND ) + 1 ) ),
+          },
+          'completionItem': {
+            'snippetSupport': True,
           }
         }
       }
