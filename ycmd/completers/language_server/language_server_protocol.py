@@ -221,6 +221,16 @@ def Initialize( request_id, project_directory, settings ):
             'valueSet': list( range( 1, len( ITEM_KIND ) + 1 ) ),
           },
           'snippetSupport': True,
+          'documentationFormat': [
+            'plaintext',
+            'markdown'
+          ],
+        },
+        'hover': {
+          'contentFormat': [
+            'plaintext',
+            'markdown'
+          ]
         }
       }
     },
