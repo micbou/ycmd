@@ -56,11 +56,11 @@ DEFAULT_SUBCOMMANDS_MAP = {
   'GoToDefinition': {
     'checker': lambda caps: caps.get( 'definitionProvider', False ),
     'handler': (
-      lambda self, request_data, args: self.GoToDeclaration( request_data )
+      lambda self, request_data, args: self.GoToDefinition( request_data )
     ),
   },
   'GoToDeclaration': {
-    'checker': lambda caps: caps.get( 'definitionProvider', False ),
+    'checker': lambda caps: caps.get( 'declarationProvider', False ),
     'handler': (
       lambda self, request_data, args: self.GoToDeclaration( request_data )
     ),
@@ -68,13 +68,25 @@ DEFAULT_SUBCOMMANDS_MAP = {
   'GoTo': {
     'checker': lambda caps: caps.get( 'definitionProvider', False ),
     'handler': (
-      lambda self, request_data, args: self.GoToDeclaration( request_data )
+      lambda self, request_data, args: self.GoToDefinition( request_data )
     ),
   },
   'GoToImprecise': {
     'checker': lambda caps: caps.get( 'definitionProvider', False ),
     'handler': (
-      lambda self, request_data, args: self.GoToDeclaration( request_data )
+      lambda self, request_data, args: self.GoToDefinition( request_data )
+    ),
+  },
+  'GoToType': {
+    'checker': lambda caps: caps.get( 'typeDefinitionProvider', False ),
+    'handler': (
+      lambda self, request_data, args: self.GoToType( request_data )
+    ),
+  },
+  'GoToImplementation': {
+    'checker': lambda caps: caps.get( 'implementationProvider', False ),
+    'handler': (
+      lambda self, request_data, args: self.GoToType( request_data )
     ),
   },
   'GoToReferences': {
@@ -1598,9 +1610,7 @@ class LanguageServerCompleter( Completer ):
     raise RuntimeError( NO_HOVER_INFORMATION )
 
 
-  def GoToDeclaration( self, request_data ):
-    """Issues the definition request and returns the result as a GoTo
-    response."""
+  def _GoToRequest( self, request_data, message_builder ):
     if not self.ServerIsReady():
       raise RuntimeError( 'Server is initializing. Please wait.' )
 
@@ -1609,7 +1619,7 @@ class LanguageServerCompleter( Completer ):
     request_id = self.GetConnection().NextRequestId()
     response = self.GetConnection().GetResponse(
       request_id,
-      lsp.Definition( request_id, request_data ),
+      message_builder( request_id, request_data ),
       REQUEST_TIMEOUT_COMMAND )
 
     if isinstance( response[ 'result' ], list ):
@@ -1625,21 +1635,34 @@ class LanguageServerCompleter( Completer ):
       raise RuntimeError( 'Cannot jump to location' )
 
 
+  def GoToDeclaration( self, request_data ):
+    """Issues the declaration request and returns the result as a GoTo
+    response."""
+    return self._GoToRequest( request_data, lsp.Declaration )
+
+
+  def GoToDefinition( self, request_data ):
+    """Issues the definition request and returns the result as a GoTo
+    response."""
+    return self._GoToRequest( request_data, lsp.Definition )
+
+
   def GoToReferences( self, request_data ):
     """Issues the references request and returns the result as a GoTo
     response."""
-    if not self.ServerIsReady():
-      raise RuntimeError( 'Server is initializing. Please wait.' )
+    return self._GoToRequest( request_data, lsp.References )
 
-    self._UpdateServerWithFileContents( request_data )
 
-    request_id = self.GetConnection().NextRequestId()
-    response = self.GetConnection().GetResponse(
-      request_id,
-      lsp.References( request_id, request_data ),
-      REQUEST_TIMEOUT_COMMAND )
+  def GoToType( self, request_data ):
+    """Issues the typeDefinition request and returns the result as a GoTo
+    response."""
+    return self._GoToRequest( request_data, lsp.TypeDefinition )
 
-    return _LocationListToGoTo( request_data, response )
+
+  def GoToImplementation( self, request_data ):
+    """Issues the implementation request and returns the result as a GoTo
+    response."""
+    return self._GoToRequest( request_data, lsp.Implementation )
 
 
   def GetCodeActions( self, request_data, args ):

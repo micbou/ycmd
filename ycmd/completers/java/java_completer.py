@@ -206,39 +206,14 @@ class JavaCompleter( language_server_completer.LanguageServerCompleter ):
     return [ 'java' ]
 
 
-  def GetSubcommandsMap( self ):
+  def GetCustomSubcommands( self ):
     return {
-      # Handled by base class
-      'GoToDeclaration': (
-        lambda self, request_data, args: self.GoToDeclaration( request_data )
-      ),
-      'GoTo': (
-        lambda self, request_data, args: self.GoToDeclaration( request_data )
-      ),
-      'GoToDefinition': (
-        lambda self, request_data, args: self.GoToDeclaration( request_data )
-      ),
-      'GoToReferences': (
-        lambda self, request_data, args: self.GoToReferences( request_data )
-      ),
       'FixIt': (
         lambda self, request_data, args: self.GetCodeActions( request_data,
                                                               args )
       ),
-      'RefactorRename': (
-        lambda self, request_data, args: self.RefactorRename( request_data,
-                                                              args )
-      ),
-      'Format': (
-        lambda self, request_data, args: self.Format( request_data )
-      ),
-
-      # Handled by us
       'RestartServer': (
         lambda self, request_data, args: self._RestartServer( request_data )
-      ),
-      'StopServer': (
-        lambda self, request_data, args: self._StopServer()
       ),
       'OpenProject': (
         lambda self, request_data, args: self._OpenProject( request_data, args )
