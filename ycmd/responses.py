@@ -278,6 +278,38 @@ def BuildFixItResponse( fixits ):
   }
 
 
+class Symbol( object ):
+  def __init__( self,
+                name,
+                description,
+                kind,
+                symbol_range,
+                deprecated = False,
+                children = None ):
+    self.name = name
+    self.description = description
+    self.kind = kind
+    self.range = symbol_range
+    self.deprecated = deprecated
+    self.children = children or []
+
+
+def BuildSymbolResponse( symbols ):
+  def BuildSymbolData( symbol ):
+    return {
+      'name': symbol.name,
+      'description': symbol.description,
+      'kind': symbol.kind,
+      'range': BuildRangeData( symbol.range ),
+      'deprecated': symbol.deprecated,
+      'children': [ BuildSymbolData( child ) for child in symbol.children ]
+    }
+
+  return {
+    'symbols': [ BuildSymbolData( symbol ) for symbol in symbols ]
+  }
+
+
 def BuildExceptionResponse( exception, traceback ):
   return {
     'exception': exception,

@@ -71,6 +71,36 @@ ITEM_KIND = [
   'TypeParameter',
 ]
 
+SYMBOL_KIND = [
+  None,  # 1-based
+  'File',
+  'Module',
+  'Namespace',
+  'Package',
+  'Class',
+  'Method',
+  'Property',
+  'Field',
+  'Constructor',
+  'Enum',
+  'Interface',
+  'Function',
+  'Variable',
+  'Constant',
+  'String',
+  'Number',
+  'Boolean',
+  'Array',
+  'Object',
+  'Key',
+  'Null',
+  'EnumMember',
+  'Struct',
+  'Event',
+  'Operator',
+  'TypeParameter',
+]
+
 SEVERITY = [
   None,
   'Error',
@@ -394,6 +424,20 @@ def Range( request_data ):
     'start': Position( start_line_num, start_line_value, start_codepoint ),
     'end': Position( end_line_num, end_line_value, end_codepoint )
   }
+
+
+def DocumentSymbol( request_id, request_data ):
+  return BuildRequest( request_id, 'textDocument/documentSymbol', {
+    'textDocument': {
+      'uri': FilePathToUri( request_data[ 'filepath' ] ),
+    }
+  } )
+
+
+def Symbol( request_id, query ):
+  return BuildRequest( request_id, 'workspace/symbol', {
+    'query': query
+  } )
 
 
 def ExecuteCommand( request_id, command, arguments ):

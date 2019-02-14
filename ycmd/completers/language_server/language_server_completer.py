@@ -94,6 +94,19 @@ DEFAULT_SUBCOMMANDS_MAP = {
     'handler': (
       lambda self, request_data, args: self.Format( request_data )
     ),
+  },
+  'FindDocumentSymbol': {
+    'checker': lambda caps: caps.get( 'documentSymbolProvider', False ),
+    'handler': (
+      lambda self, request_data, args: self.FindDocumentSymbol( request_data )
+    ),
+  },
+  'FindProjectSymbol': {
+    'checker': lambda caps: caps.get( 'workspaceSymbolProvider', False ),
+    'handler': (
+      lambda self, request_data, args: self.FindProjectSymbol( request_data,
+                                                               args )
+    ),
   }
 }
 
@@ -1736,6 +1749,61 @@ class LanguageServerCompleter( Completer ):
       chunks ) ] )
 
 
+  def FindDocumentSymbol( self, request_data ):
+    """Issues the textDocument/documentSymbol request and returns the result as
+    a Symbol response."""
+    if not self.ServerIsReady():
+      raise RuntimeError( 'Server is initializing. Please wait.' )
+
+    self._UpdateServerWithFileContents( request_data )
+
+    request_id = self.GetConnection().NextRequestId()
+    response = self.GetConnection().GetResponse(
+      request_id,
+      lsp.DocumentSymbol( request_id, request_data ),
+      REQUEST_TIMEOUT_COMMAND )
+    response = response[ 'result' ] or []
+    filepath = request_data[ 'filepath' ]
+    contents = GetFileLines( request_data, filepath )
+    if response and 'selectionRange' in response[ 0 ]:
+      # Server returned a list of DocumentSymbol.
+      symbols = [ _BuildDocumentSymbol( contents, filepath, doc_symbol )
+                  for doc_symbol in response ]
+    else:
+      # Server returned a list of SymbolInformation.
+      symbols = [ _BuildSymbolInformation( request_data, info_symbol )
+                  for info_symbol in response ]
+
+    return responses.BuildSymbolResponse( symbols )
+
+
+  def FindProjectSymbol( self, request_data, args ):
+    """Issues the workspace/symbol request and returns the result as a Symbol
+    response."""
+    if not self.ServerIsReady():
+      raise RuntimeError( 'Server is initializing. Please wait.' )
+
+    # if len( args ) != 1 or not args[ 0 ]:
+    #   raise ValueError(
+    #     'Please specify a non-empty string that symbols should match.\n'
+    #     'Usage: FindProjectSymbol <query>' )
+
+    query = args[ 0 ] if len( args ) > 0 else ''
+
+    self._UpdateServerWithFileContents( request_data )
+
+    request_id = self.GetConnection().NextRequestId()
+    response = self.GetConnection().GetResponse(
+      request_id,
+      lsp.Symbol( request_id, query ),
+      REQUEST_TIMEOUT_COMMAND )
+    response = response[ 'result' ] or []
+
+    return responses.BuildSymbolResponse( [
+      _BuildSymbolInformation( request_data,
+                               info_symbol ) for info_symbol in response ] )
+
+
   def GetCommandResponse( self, request_data, command, arguments ):
     if not self.ServerIsReady():
       raise RuntimeError( 'Server is initializing. Please wait.' )
@@ -2023,24 +2091,28 @@ def _LocationListToGoTo( request_data, response ):
     raise RuntimeError( 'Cannot jump to location' )
 
 
-def _PositionToLocationAndDescription( request_data, position ):
-  """Convert a LSP position to a ycmd location."""
+def _PositionToFilePathAndContents( request_data, position ):
+  """Get the filepath and file contents from a LSP position."""
   try:
     filename = lsp.UriToFilePath( position[ 'uri' ] )
-    file_contents = GetFileLines( request_data, filename )
+    return filename, GetFileLines( request_data, filename )
   except lsp.InvalidUriException:
     LOGGER.debug( 'Invalid URI, file contents not available in GoTo' )
-    filename = ''
-    file_contents = []
+    return '', []
   except IOError:
     # It's possible to receive positions for files which no longer exist (due to
     # race condition). UriToFilePath doesn't throw IOError, so we can assume
     # that filename is already set.
     LOGGER.exception( 'A file could not be found when determining a '
                       'GoTo location' )
-    file_contents = []
+    return '', []
 
-  return _BuildLocationAndDescription( filename,
+
+def _PositionToLocationAndDescription( request_data, position ):
+  """Convert a LSP position to a ycmd location."""
+  filepath, file_contents = _PositionToFilePathAndContents( request_data,
+                                                            position )
+  return _BuildLocationAndDescription( filepath,
                                        file_contents,
                                        position[ 'range' ][ 'start' ] )
 
@@ -2095,6 +2167,31 @@ def _BuildDiagnostic( contents, uri, diag ):
     location_extent = r,
     text = diag[ 'message' ],
     kind = lsp.SEVERITY[ diag[ 'severity' ] ].upper() )
+
+
+def _BuildDocumentSymbol( contents, filepath, doc_symbol ):
+  return responses.Symbol(
+    doc_symbol[ 'name' ],
+    doc_symbol.get( 'detail', '' ),
+    lsp.SYMBOL_KIND[ doc_symbol[ 'kind' ] ],
+    _BuildRange( contents, filepath, doc_symbol[ 'range' ] ),
+    doc_symbol.get( 'deprecated', False ),
+    [ _BuildDocumentSymbol( child )
+      for child in doc_symbol.get( 'children', [] ) ]
+  )
+
+
+def _BuildSymbolInformation( request_data, symbol_info ):
+  location = symbol_info[ 'location' ]
+  filepath, contents = _PositionToFilePathAndContents( request_data, location )
+
+  return responses.Symbol(
+    symbol_info[ 'name' ],
+    '',
+    lsp.SYMBOL_KIND[ symbol_info[ 'kind' ] ],
+    _BuildRange( contents, filepath, location[ 'range' ] ),
+    symbol_info.get( 'deprecated', False )
+  )
 
 
 def TextEditToChunks( request_data, uri, text_edit ):

@@ -24,6 +24,7 @@ from builtins import *  # noqa
 
 from hamcrest import ( assert_that,
                        contains,
+                       contains_inanyorder,
                        has_entries,
                        has_entry,
                        matches_regexp )
@@ -31,7 +32,10 @@ import os.path
 
 from ycmd.utils import ReadFile
 from ycmd.tests.python import PathToTestFile, SharedYcmd
-from ycmd.tests.test_utils import BuildRequest, LocationMatcher, ErrorMatcher
+from ycmd.tests.test_utils import ( BuildRequest,
+                                    ErrorMatcher,
+                                    LocationMatcher,
+                                    RangeMatcher )
 
 
 @SharedYcmd
@@ -379,3 +383,84 @@ def Subcommands_GoToReferences_NoReferences_test( app ):
 
   assert_that( response,
                ErrorMatcher( RuntimeError, 'Can\'t find references.' ) )
+
+
+@SharedYcmd
+def Subcommands_FindDocumentSymbol_test( app ):
+  filepath = PathToTestFile( 'find_document_symbol.py' )
+  contents = ReadFile( filepath )
+
+  command_data = BuildRequest( filepath = filepath,
+                               filetype = 'python',
+                               contents = contents,
+                               command_arguments = [ 'FindDocumentSymbol' ] )
+
+  assert_that(
+    app.post_json( '/run_completer_command', command_data ).json,
+    has_entry( 'symbols', contains_inanyorder(
+      has_entries( {
+        'name': 'Foo',
+        'description': 'class Foo(args, kwargs)',
+        'kind': 'class',
+        'range': RangeMatcher( filepath, ( 1, 7 ), ( 1, 10 ) ),
+        'deprecated': False,
+        'children': []
+      } ),
+      has_entries( {
+        'name': 'bar',
+        'description': 'def bar(self, xyz)',
+        'kind': 'function',
+        'range': RangeMatcher( filepath, ( 2, 7 ), ( 2, 10 ) ),
+        'deprecated': False,
+        'children': []
+      } ),
+      has_entries( {
+        'name': 'self',
+        'description': 'param self',
+        'kind': 'param',
+        'range': RangeMatcher( filepath, ( 2, 11 ), ( 2, 15 ) ),
+        'deprecated': False,
+        'children': []
+      } ),
+      has_entries( {
+        'name': 'xyz',
+        'description': 'param xyz',
+        'kind': 'param',
+        'range': RangeMatcher( filepath, ( 2, 17 ), ( 2, 20 ) ),
+        'deprecated': False,
+        'children': []
+      } ),
+      has_entries( {
+        'name': 'foo',
+        'description': 'foo = Foo()',
+        'kind': 'statement',
+        'range': RangeMatcher( filepath, ( 5, 1 ), ( 5, 4 ) ),
+        'deprecated': False,
+        'children': []
+      } ),
+      has_entries( {
+        'name': 'Foo',
+        'description': 'Foo',
+        'kind': 'statement',
+        'range': RangeMatcher( filepath, ( 5, 7 ), ( 5, 10 ) ),
+        'deprecated': False,
+        'children': []
+      } ),
+      has_entries( {
+        'name': 'foo',
+        'description': 'foo',
+        'kind': 'statement',
+        'range': RangeMatcher( filepath, ( 6, 1 ), ( 6, 4 ) ),
+        'deprecated': False,
+        'children': []
+      } ),
+      has_entries( {
+        'name': 'bar',
+        'description': 'bar',
+        'kind': 'statement',
+        'range': RangeMatcher( filepath, ( 6, 5 ), ( 6, 8 ) ),
+        'deprecated': False,
+        'children': []
+      } )
+    ) )
+  )

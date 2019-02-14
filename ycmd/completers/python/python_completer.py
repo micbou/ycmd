@@ -211,18 +211,20 @@ class PythonCompleter( Completer ):
 
   def GetSubcommandsMap( self ):
     return {
-      'GoToDefinition' : ( lambda self, request_data, args:
-                           self._GoToDefinition( request_data ) ),
-      'GoToDeclaration': ( lambda self, request_data, args:
-                           self._GoToDeclaration( request_data ) ),
-      'GoTo'           : ( lambda self, request_data, args:
-                           self._GoTo( request_data ) ),
-      'GoToReferences' : ( lambda self, request_data, args:
-                           self._GoToReferences( request_data ) ),
-      'GetType'        : ( lambda self, request_data, args:
-                           self._GetType( request_data ) ),
-      'GetDoc'         : ( lambda self, request_data, args:
-                           self._GetDoc( request_data ) )
+      'GoToDefinition'    : ( lambda self, request_data, args:
+                              self._GoToDefinition( request_data ) ),
+      'GoToDeclaration'   : ( lambda self, request_data, args:
+                              self._GoToDeclaration( request_data ) ),
+      'GoTo'              : ( lambda self, request_data, args:
+                              self._GoTo( request_data ) ),
+      'GoToReferences'    : ( lambda self, request_data, args:
+                              self._GoToReferences( request_data ) ),
+      'GetType'           : ( lambda self, request_data, args:
+                              self._GetType( request_data ) ),
+      'GetDoc'            : ( lambda self, request_data, args:
+                              self._GetDoc( request_data ) ),
+      'FindDocumentSymbol': ( lambda self, request_data, args:
+                              self._FindDocumentSymbol( request_data ) )
     }
 
 
@@ -264,7 +266,9 @@ class PythonCompleter( Completer ):
       # Remove the "param " prefix from the description.
       type_info += '(' + ', '.join(
         [ param.description[ 6: ] for param in definition.params ] ) + ')'
-    except AttributeError:
+    # TODO: Jedi may raise a ValueError when using names(). See
+    # https://github.com/davidhalter/jedi/issues/1286
+    except ( AttributeError, ValueError ):
       pass
     return type_info
 
@@ -318,6 +322,41 @@ class PythonCompleter( Completer ):
                                                    definition.column + 1,
                                                    definition.description ) )
     return gotos
+
+
+  # This method must be called under Jedi's lock.
+  def _BuildRange( self, definition ):
+    module_path = definition.module_path
+    line = definition.line
+    column = definition.column + 1
+    start = responses.Location( line, column, module_path )
+    end = responses.Location( line,
+                              column + len( definition.name ),
+                              module_path )
+    return responses.Range( start, end )
+
+
+  def _GetJediNames( self, request_data ):
+    path = request_data[ 'filepath' ]
+    source = request_data[ 'file_data' ][ path ][ 'contents' ]
+    environment = self._EnvironmentForRequest( request_data )
+    return jedi.names( source,
+                       path,
+                       all_scopes = True,
+                       definitions = True,
+                       references = True,
+                       environment = environment )
+
+
+  def _FindDocumentSymbol( self, request_data ):
+    with self._jedi_lock:
+      return responses.BuildSymbolResponse( [
+        responses.Symbol(
+          name = jedi_name.name,
+          description = self._BuildTypeInfo( jedi_name ),
+          kind = jedi_name.type,
+          symbol_range = self._BuildRange( jedi_name )
+        ) for jedi_name in self._GetJediNames( request_data ) ] )
 
 
   def DebugInfo( self, request_data ):
