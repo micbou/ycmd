@@ -309,7 +309,7 @@ def Subcommands_GoToReferences_Function_test( app ):
         'filepath': PathToTestFile( 'goto_references.py' ),
         'line_num': 1,
         'column_num': 5,
-        'description': 'def f'
+        'description': 'def f()'
       } ),
       has_entries( {
         'filepath': PathToTestFile( 'goto_references.py' ),
@@ -349,7 +349,7 @@ def Subcommands_GoToReferences_Builtin_test( app ):
     app.post_json( '/run_completer_command', command_data ).json,
     contains(
       has_entries( {
-        'description': 'Builtin class str',
+        'description': 'Builtin class str(object)',
       } ),
       has_entries( {
         'filepath': PathToTestFile( 'goto_references.py' ),

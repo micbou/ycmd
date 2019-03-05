@@ -264,7 +264,10 @@ class PythonCompleter( Completer ):
       # Remove the "param " prefix from the description.
       type_info += '(' + ', '.join(
         [ param.description[ 6: ] for param in definition.params ] ) + ')'
-    except AttributeError:
+    # FIXME: Jedi may raise a ValueError("Should not happen...") exception when
+    # getting the parameters. This is fixed in recent versions of Jedi. Remove
+    # the exception from the catch block next time Jedi is updated.
+    except ( AttributeError, ValueError ):
       pass
     return type_info
 
@@ -309,14 +312,15 @@ class PythonCompleter( Completer ):
 
     gotos = []
     for definition in definitions:
+      description = self._BuildTypeInfo( definition )
       if definition.in_builtin_module():
         gotos.append( responses.BuildDescriptionOnlyGoToResponse(
-          'Builtin {}'.format( definition.description ) ) )
+          'Builtin {}'.format( description ) ) )
       else:
         gotos.append( responses.BuildGoToResponse( definition.module_path,
                                                    definition.line,
                                                    definition.column + 1,
-                                                   definition.description ) )
+                                                   description ) )
     return gotos
 
 
