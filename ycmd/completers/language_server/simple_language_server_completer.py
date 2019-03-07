@@ -94,9 +94,6 @@ class SimpleLSPCompleter( lsc.LanguageServerCompleter ):
 
   def StartServer( self, request_data ):
     with self._server_state_mutex:
-      # Ensure we cleanup all states.
-      self._Reset()
-
       LOGGER.info( 'Starting %s: %s',
                    self.GetServerName(),
                    self.GetCommandLine() )
