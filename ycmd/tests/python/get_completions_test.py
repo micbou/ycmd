@@ -35,6 +35,7 @@ from hamcrest import ( all_of,
                        has_entry,
                        has_entries,
                        is_not )
+from pprint import pformat
 import requests
 
 from ycmd.utils import ReadFile
@@ -72,6 +73,8 @@ def RunTest( app, test ):
                               'contents': contents
                             } ),
                             expect_errors = True )
+
+  print( 'Completer response: {}'.format( pformat( response.json ) ) )
 
   eq_( response.status_code, test[ 'expect' ][ 'response' ] )
 
@@ -200,7 +203,7 @@ def GetCompletions_Unicode_InLine_test( app ):
       'response': requests.codes.ok,
       'data': has_entries( {
         'completions': contains(
-          CompletionEntryMatcher( 'center', 'def center(width, fillchar)' )
+          CompletionEntryMatcher( 'center', 'def center(width, fillchar)' ),
         ),
         'errors': empty()
       } )
@@ -387,3 +390,64 @@ def GetCompletions_PythonInterpreter_ExtraConfData_test( app ):
       'errors': empty()
     } )
   )
+
+
+@SharedYcmd
+def GetCompletions_Snippet_FunctionWithVariableArguments_test( app ):
+  RunTest( app, {
+    'description': 'support snippet for function with variable arguments',
+    'request': {
+      'filetype'      : 'python',
+      'filepath'      : PathToTestFile( 'basic.py' ),
+      'line_num'      : 12,
+      'column_num'    : 3,
+      'force_semantic': True
+    },
+    'expect': {
+      'response': requests.codes.ok,
+      'data': has_entries( {
+        'completions': contains(
+          CompletionEntryMatcher(
+            'function_varargs',
+            'def function_varargs(pos_param, *args, '
+                                 'named_param =True, **kwargs)',
+            {
+              'snippet': 'function_varargs(${1:pos_param}, ${2:*args}'
+                         '${3:, named_param = ${4:True}}, ${5:**kwargs})$0'
+            }
+          )
+        ),
+        'errors': empty()
+      } )
+    }
+  } )
+
+
+@SharedYcmd
+def GetCompletions_Snippet_Keyword_test( app ):
+  RunTest( app, {
+    'description': 'support snippet for keyword',
+    'request': {
+      'filetype'      : 'python',
+      'filepath'      : PathToTestFile( 'basic.py' ),
+      'line_num'      : 1,
+      'column_num'    : 6,
+      'force_semantic': True
+    },
+    'expect': {
+      'response': requests.codes.ok,
+      'data': has_entries( {
+        'completions': has_item(
+          CompletionEntryMatcher(
+            'class',
+            'keyword class',
+            {
+              'kind': 'keyword',
+              'snippet': 'class ${1:classname}${2:(${3:object})}:\n\t$0'
+            }
+          )
+        ),
+        'errors': empty()
+      } )
+    }
+  } )

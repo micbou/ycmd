@@ -26,7 +26,7 @@ import subprocess
 import os
 import re
 
-from ycmd import responses, utils
+from ycmd import responses
 from ycmd.completers.completer_utils import GetFileLines
 from ycmd.completers.language_server import simple_language_server_completer
 from ycmd.completers.language_server import language_server_completer

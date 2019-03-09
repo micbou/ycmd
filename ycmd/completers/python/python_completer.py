@@ -24,12 +24,32 @@ from builtins import *  # noqa
 
 from ycmd import extra_conf_store, responses
 from ycmd.completers.completer import Completer
-from ycmd.utils import ExpandVariablesInPath, FindExecutable, LOGGER
+from ycmd.utils import ExpandVariablesInPath, FindExecutable, LOGGER, re
 
 import os
 import jedi
 import parso
 from threading import Lock
+
+
+# Based on https://docs.python.org/3/reference
+# TODO: implement remaining keywords.
+KEYWORD_SNIPPETS = {
+  'assert': 'assert ${1:expression}${2:, ${3:expression}}$0',
+  'async': 'async $0',
+  'await': 'await $0',
+  'break': 'break\n$0',
+  'class': 'class ${1:classname}${2:(${3:object})}:\n'
+           '\t$0',
+  'continue': 'continue\n$0',
+  'def': 'def ${1:funcname}(${2:parameters}):\n'
+           '\t$0',
+  'if': 'if ${1:condition}:\n'
+        '\t$0'
+}
+
+PARAMETER_REGEX = re.compile(
+  r'param (?P<parameter>\*{0,2}\w+)(?:\s*=\s*(?P<expression>.+))?' )
 
 
 class PythonCompleter( Completer ):
@@ -206,6 +226,7 @@ class PythonCompleter( Completer ):
         candidate[ 'detailed_info' ] = completion.docstring()
         candidate[ 'kind' ] = completion.type
         candidate[ 'extra_data' ] = self._GetExtraData( completion )
+        candidate[ 'snippet' ] = self._BuildSnippet( completion )
     return candidates
 
 
@@ -267,6 +288,46 @@ class PythonCompleter( Completer ):
     except AttributeError:
       pass
     return type_info
+
+
+  # This method must be called under Jedi's lock.
+  def _BuildSnippet( self, definition ):
+    if definition.is_keyword:
+      try:
+        return KEYWORD_SNIPPETS[ definition.name ]
+      except KeyError:
+        LOGGER.error( 'Missing snippet for keyword %s', definition.name )
+        return None
+    try:
+      parameters = definition.params
+    except AttributeError:
+      return None
+
+    snippet = ''
+    placeholder_nb = 1
+    param_sep = ''
+    for param in parameters:
+      description = param.description
+      match = PARAMETER_REGEX.match( description )
+      if not match:
+        LOGGER.error( 'Could not parse parameter %s for %s', param, definition )
+        continue
+      param = match.group( 'parameter' )
+      expression = match.group( 'expression' )
+      if not expression:
+        snippet += '{}${{{}:{}}}'.format( param_sep,
+                                          placeholder_nb,
+                                          param )
+        placeholder_nb += 1
+      else:
+        snippet += '${{{}:{}{} = ${{{}:{}}}}}'.format( placeholder_nb,
+                                                       param_sep,
+                                                       param,
+                                                       placeholder_nb + 1,
+                                                       expression )
+        placeholder_nb += 2
+      param_sep = ', '
+    return definition.name + '(' + snippet + ')$0'
 
 
   def _GetType( self, request_data ):

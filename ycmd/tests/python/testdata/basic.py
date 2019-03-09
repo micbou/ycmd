@@ -5,3 +5,8 @@ class Foo(object):
 
 f = Foo()
 f.a
+
+def function_varargs(pos_param, *args, named_param =True, **kwargs ):
+  pass
+
+fv
