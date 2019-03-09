@@ -24,12 +24,83 @@ from builtins import *  # noqa
 
 from ycmd import extra_conf_store, responses
 from ycmd.completers.completer import Completer
-from ycmd.utils import ExpandVariablesInPath, FindExecutable, LOGGER
+from ycmd.utils import ExpandVariablesInPath, FindExecutable, LOGGER, re
 
 import os
 import jedi
 import parso
 from threading import Lock
+
+PARAMETER_REGEX = re.compile(
+  r'param (?P<parameter>\*{0,2}\w+)(?:\s*=\s*(?P<expression>.+))?' )
+
+# The complete list of keywords can be obtained using the keyword module:
+# https://docs.python.org/3/library/keyword.html
+# Their description can be found at https://docs.python.org/3/reference.
+# NOTE: block indentation and tab expansion (e.g. replacing tabs with 4 spaces)
+# are left to the client.
+KEYWORD_SNIPPETS = {
+  'False'   : 'False$0',
+  'None'    : 'None$0',
+  'True'    : 'True$0',
+  'and'     : 'and ${1:expression}$0',
+  'as'      : 'as ${1:alias}$0',
+  'assert'  : 'assert ${1:${2:expression}, ${3:expression}}$0',
+  'async'   : 'async $0',
+  'await'   : 'await $0',
+  'break'   : 'break$0',
+  'class'   : 'class ${1:${2:classname}(${3:object})}:\n'
+              '\t$0',
+  'continue': 'continue$0',
+  'def'     : 'def ${1:funcname}(${2:parameters}):\n'
+              '\t$0',
+  'del'     : 'del ${1:target}$0',
+  'elif'    : 'elif ${1:expression}:'
+              '\t$0',
+  'else'    : 'else:\n'
+              '\t$0',
+  'except'  : 'except${1: ${2:${3:expression} as ${4:identifier}}}:\n'
+              '\t$5$0',
+  'finally' : 'finally:\n'
+              '\t$0',
+  # FIXME: a different 'for' snippet should be used inside a list comprehension.
+  'for'     : 'for ${1:target} in ${2:expression}:\n'
+              '\t${3:$4\n'
+              'else:\n'
+              '\t$5}$0',
+  'from'    : 'from ${1:module} import ${2:${3:identifier} as ${4:alias}}$0',
+  'global'  : 'global ${1:identifier}$0',
+  # FIXME: a different 'if' snippet should be used inside a list comprehension.
+  'if'      : 'if ${1:expression}:\n'
+              '\t${2:$3\n'
+              'else:\n'
+              '\t$4}$0',
+  'import'  : 'import ${1:${2:identifier} as ${3:alias}}$0',
+  'in'      : 'in ${1:expression}$0',
+  'is'      : 'is $0',
+  'lambda'  : 'lambda ${1:parameter}: ${2:expression}$0',
+  'nonlocal': 'nonlocal ${1:identifier}$0',
+  'not'     : 'not ${1:expression}$0',
+  'or'      : 'or ${1:expression}$0',
+  'pass'    : 'pass$0',
+  'raise'   : 'raise${1: ${2:expression}${3: from ${4:expression}}}$0',
+  'return'  : 'return${1: ${2:expression}}$0',
+  'try'     : 'try:\n'
+              '\t${1:$2\n'
+              'except${3: ${4:${5:expression} as ${6:identifier}}}:\n'
+              '\t${7:$8\n'
+              'else:\n'
+              '\t}}${9:\n'
+              'finally:\n'
+              '\t$10}$0',
+  'while'   : 'while ${1:expression}:\n'
+              '\t${2:$3\n'
+              'else:\n'
+              '\t$4}$0',
+  'with'    : 'with ${1:${2:expression} as ${3:target}}:'
+              '\t$0',
+  'yield'   : 'yield${1: ${2:from ${3:expression}}}$0'
+}
 
 
 class PythonCompleter( Completer ):
@@ -206,6 +277,7 @@ class PythonCompleter( Completer ):
         candidate[ 'detailed_info' ] = completion.docstring()
         candidate[ 'kind' ] = completion.type
         candidate[ 'extra_data' ] = self._GetExtraData( completion )
+        candidate[ 'snippet' ] = self._BuildSnippet( completion )
     return candidates
 
 
@@ -267,6 +339,47 @@ class PythonCompleter( Completer ):
     except AttributeError:
       pass
     return type_info
+
+
+  # This method must be called under Jedi's lock.
+  def _BuildSnippet( self, definition ):
+    name = definition.name
+
+    try:
+      return KEYWORD_SNIPPETS[ name ]
+    except KeyError:
+      pass
+
+    try:
+      parameters = definition.params
+    except AttributeError:
+      return None
+
+    snippet = ''
+    placeholder_nb = 1
+    param_sep = ''
+    for param in parameters:
+      description = param.description
+      match = PARAMETER_REGEX.match( description )
+      if not match:
+        LOGGER.error( 'Could not parse parameter %s for %s', param, definition )
+        continue
+      param = match.group( 'parameter' )
+      expression = match.group( 'expression' )
+      if not expression:
+        snippet += '{}${{{}:{}}}'.format( param_sep,
+                                          placeholder_nb,
+                                          param )
+        placeholder_nb += 1
+      else:
+        snippet += '${{{}:{}{} = ${{{}:{}}}}}'.format( placeholder_nb,
+                                                       param_sep,
+                                                       param,
+                                                       placeholder_nb + 1,
+                                                       expression )
+        placeholder_nb += 2
+      param_sep = ', '
+    return name + '(' + snippet + ')$0'
 
 
   def _GetType( self, request_data ):
