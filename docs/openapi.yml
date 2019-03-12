@@ -105,7 +105,7 @@ info:
     YCM README.md for the list of filetypes recognized by ycmd for semantic
     completion.
 
-  version: 0.3.0
+  version: 0.4.0
 
 externalDocs:
   description: ycmd GitHub page
@@ -370,6 +370,8 @@ definitions:
 
   Candidate:
     type: object
+    required:
+      - insertion_text
     properties:
       insertion_text:
         type: string
@@ -420,6 +422,21 @@ definitions:
             description: |-
               Additional documentation/information to be displayed
               alongside (after) information in `detailed_info`.
+      snippet:
+        type: string
+        description: |-
+          The snippet to expand when selecting the completion. Supported
+          snippets are a subset of [the Textmate ones](https://macromates.com/textmate/manual/snippets)
+          without the interpolated shell code, transformations, and choice
+          features. They follow the grammar:
+          ```python
+          snippet     = ( tabstop | placeholder | text )*
+          tabstop     = '$' integer | '${' integer '}'
+          placeholder = '${' integer ':' snippet '}'
+          integer     = [0-9]+
+          text        = .*
+          ```
+          `$` and `}` can be escaped in `text` with `\`.
 
   CompletionResponse:
     type: object
