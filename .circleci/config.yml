@@ -14,7 +14,7 @@ aliases:
   run-tests: &run-tests
     run:
       name: Run tests
-      command: ./run_tests.py --no-flake8 --runs 10
+      command: ./run_tests.py --no-flake8 --runs 100 -- ycmd/tests/rust
   upload-coverage: &upload-coverage
     run:
       name: Upload coverage
