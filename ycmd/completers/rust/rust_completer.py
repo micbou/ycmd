@@ -66,6 +66,16 @@ def ShouldEnableRustCompleter():
   return True
 
 
+def _FindProjectDir( path ):
+  project_path = os.path.dirname( path )
+  for folder in utils.PathsToAllParentFolders( path ):
+    if os.path.isfile( os.path.join( folder, 'Cargo.toml' ) ):
+      project_path = folder
+      break
+
+  return project_path
+
+
 class RustCompleter( language_server_completer.LanguageServerCompleter ):
   def __init__( self, user_options ):
     super( RustCompleter, self ).__init__( user_options )
@@ -162,9 +172,16 @@ class RustCompleter( language_server_completer.LanguageServerCompleter ):
       self._StartAndInitializeServer( request_data )
 
 
+  def _GetProjectDirectory( self, *args, **kwargs ):
+    return self._rust_project_directory
+
+
   def StartServer( self, request_data ):
     with self._server_state_mutex:
       LOGGER.info( 'Starting Rust Language Server...' )
+
+      self._rust_project_directory = _FindProjectDir(
+          request_data[ 'filepath' ] )
 
       self._server_logfile = utils.CreateLogfile( LOGFILE_FORMAT )
 

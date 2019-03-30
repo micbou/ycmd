@@ -34,7 +34,7 @@ import requests
 import time
 
 from ycmd import handlers
-from ycmd.tests.rust import PathToTestFile, SharedYcmd
+from ycmd.tests.rust import PathToTestFile, SharedYcmd, IsolatedYcmd
 from ycmd.tests.test_utils import ( BuildRequest,
                                     ChunkMatcher,
                                     ErrorMatcher,
@@ -148,9 +148,13 @@ def Subcommands_ServerNotReady_test():
   yield Test, 'RefactorRename', [ 'test' ]
 
 
-@SharedYcmd
+@IsolatedYcmd
 def Subcommands_Format_WholeFile_test( app ):
-  filepath = PathToTestFile( 'common', 'src', 'main.rs' )
+  # RLS can't execute textDocument/formatting if any file
+  # under the project root has errors, so we need to use
+  # a different project just for formatting.
+  # For further details check https://github.com/rust-lang/rls/issues/1397
+  filepath = PathToTestFile( 'formatting', 'src', 'main.rs' )
 
   RunTest( app, {
     'description': 'Formatting is applied on the whole file',
@@ -167,20 +171,15 @@ def Subcommands_Format_WholeFile_test( app ):
       'data': has_entries( {
         'fixits': contains( has_entries( {
           'chunks': contains(
-            ChunkMatcher( 'mod test;\n'
-                          '\n'
-                          'use test::*;\n'
-                          '\n'
-                          'fn unformatted_function(param: bool) -> bool {\n'
+            ChunkMatcher( 'fn unformatted_function(param: bool) -> bool {\n'
                           '  return param;\n'
                           '}\n'
                           '\n'
                           'fn main() {\n'
-                          '  create_universe();\n'
-                          '  build_\n'
+                          '  unformatted_function(false);\n'
                           '}\n',
                           LocationMatcher( filepath,  1, 1 ),
-                          LocationMatcher( filepath, 13, 1 ) ),
+                          LocationMatcher( filepath,  9, 1 ) ),
           )
         } ) )
       } )
@@ -188,9 +187,13 @@ def Subcommands_Format_WholeFile_test( app ):
   } )
 
 
-@SharedYcmd
+@IsolatedYcmd
 def Subcommands_Format_Range_test( app ):
-  filepath = PathToTestFile( 'common', 'src', 'main.rs' )
+  # RLS can't execute textDocument/formatting if any file
+  # under the project root has errors, so we need to use
+  # a different project just for formatting.
+  # For further details check https://github.com/rust-lang/rls/issues/1397
+  filepath = PathToTestFile( 'formatting', 'src', 'main.rs' )
 
   RunTest( app, {
     'description': 'Formatting is applied on some part of the file',
@@ -199,12 +202,12 @@ def Subcommands_Format_Range_test( app ):
       'filepath': filepath,
       'range': {
         'start': {
-          'line_num': 5,
+          'line_num': 1,
           'column_num': 1,
         },
         'end': {
-          'line_num': 6,
-          'column_num': 17
+          'line_num': 2,
+          'column_num': 18
         }
       },
       'options': {
@@ -217,21 +220,18 @@ def Subcommands_Format_Range_test( app ):
       'data': has_entries( {
         'fixits': contains( has_entries( {
           'chunks': contains(
-            ChunkMatcher( 'mod test;\n'
-                          '\n'
-                          'use test::*;\n'
-                          '\n'
-                          'fn unformatted_function(param: bool) -> bool {\n'
+            ChunkMatcher( 'fn unformatted_function(param: bool) -> bool {\n'
                           '\treturn param;\n'
                           '}\n'
                           '\n'
-                          'fn main()\n'
-                          '{\n'
-                          '    create_universe( );\n'
-                          '    build_\n'
+                          'fn \n'
+                          'main()\n'
+                          '                                {\n'
+                          '        unformatted_function( false );\n'
+
                           '}\n',
-                          LocationMatcher( filepath,  1, 1 ),
-                          LocationMatcher( filepath, 13, 1 ) ),
+                          LocationMatcher( filepath, 1, 1 ),
+                          LocationMatcher( filepath, 9, 1 ) ),
           )
         } ) )
       } )

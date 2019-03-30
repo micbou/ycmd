@@ -463,7 +463,7 @@ def FileReadyToParse_Diagnostics_InvalidURI_test( app, uri_to_filepath, *args ):
   expiration = time.time() + 10
   while True:
     try:
-      results = WaitForDiagnosticsToBeReady( app, filepath, contents )
+      results = WaitForDiagnosticsToBeReady( app, filepath, contents, 'java' )
       print( 'Completer response: {0}'.format(
         json.dumps( results, indent=2 ) ) )
 
