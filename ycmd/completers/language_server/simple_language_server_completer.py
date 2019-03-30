@@ -80,12 +80,8 @@ class SimpleLSPCompleter( lsc.LanguageServerCompleter ):
                                           logfiles = [ self._stderr_file ],
                                           extras = self.CommonDebugItems() )
 
-    return responses.BuildDebugInfoResponse( name = self.Language(),
+    return responses.BuildDebugInfoResponse( name = self.GetCompleterName(),
                                              servers = [ server ] )
-
-
-  def Language( self ):
-    return self.GetServerName()
 
 
   def ServerIsHealthy( self ):

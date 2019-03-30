@@ -361,10 +361,6 @@ class JavaCompleter( language_server_completer.LanguageServerCompleter ):
     self.ServerReset()
 
 
-  def Language( self ):
-    return 'java'
-
-
   def StartServer( self, request_data, project_directory = None ):
     with self._server_state_mutex:
       LOGGER.info( 'Starting jdt.ls Language Server...' )

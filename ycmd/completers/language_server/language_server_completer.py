@@ -647,13 +647,13 @@ class LanguageServerCompleter( Completer ):
       - Shutdown
       - ServerIsHealthy : Return True if the server is _running_
       - StartServer : Return True if the server was started.
-      - Language : a string used to identify the language in user's extra conf
     - Optionally override methods to customise behavior:
       - _GetProjectDirectory
       - _GetTriggerCharacters
       - GetDefaultNotificationHandler
       - HandleNotificationInPollThread
       - ConvertNotificationToMessage
+      - Language
 
   Startup
 
@@ -738,6 +738,9 @@ class LanguageServerCompleter( Completer ):
     #    cached query is a prefix of the subsequent queries.
     self._completions_cache = LanguageServerCompletionsCache()
 
+    self._completer_name = self.__class__.__name__.replace( 'Completer', '' )
+    self._language = self._completer_name.lower()
+
 
   def ServerReset( self ):
     """Clean up internal state related to the running server instance.
@@ -756,9 +759,15 @@ class LanguageServerCompleter( Completer ):
       self._settings = {}
       self._server_started = False
 
-  @abc.abstractmethod
+
+  def GetCompleterName( self ):
+    return self._completer_name
+
+
   def Language( self ):
-    pass # pragma: no cover
+    """Returns the string used to identify the language in user's
+    .ycm_extra_conf.py file."""
+    return self._language
 
 
   @abc.abstractmethod

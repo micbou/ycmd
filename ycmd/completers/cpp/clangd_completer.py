@@ -217,7 +217,7 @@ class ClangdCompleter( simple_language_server_completer.SimpleLSPCompleter ):
 
 
   def GetServerName( self ):
-    return 'clangd'
+    return 'Clangd'
 
 
   def GetCommandLine( self ):
