@@ -41,13 +41,12 @@ DIAG_MATCHERS_PER_FILE = {
   MAIN_FILEPATH: contains_inanyorder(
     has_entries( {
       'kind': 'ERROR',
-      'text': 'cannot find value `build_` in this scope\n\n'
-              'not found in this scope',
-      'location': LocationMatcher( MAIN_FILEPATH, 11, 5 ),
-      'location_extent': RangeMatcher( MAIN_FILEPATH, ( 11, 5 ), ( 11, 11 ) ),
+      'text': 'no field `build_` on type `test::Builder`\n\nunknown field',
+      'location': LocationMatcher( MAIN_FILEPATH, 14, 13 ),
+      'location_extent': RangeMatcher( MAIN_FILEPATH, ( 14, 13 ), ( 14, 19 ) ),
       'ranges': contains( RangeMatcher( MAIN_FILEPATH,
-                                        ( 11, 5 ),
-                                        ( 11, 11 ) ) ),
+                                        ( 14, 13 ),
+                                        ( 14, 19 ) ) ),
       'fixit_available': False
     } )
   )
@@ -61,7 +60,7 @@ def Diagnostics_FileReadyToParse_test( app ):
 
   # It can take a while for the diagnostics to be ready.
   results = WaitForDiagnosticsToBeReady( app, filepath, contents, 'rust' )
-  print( 'completer response: {0}'.format( pformat( results ) ) )
+  print( 'completer response: {}'.format( pformat( results ) ) )
 
   assert_that( results, DIAG_MATCHERS_PER_FILE[ filepath ] )
 
@@ -80,13 +79,13 @@ def Diagnostics_Poll_test( app ):
                                     { 'filepath': filepath,
                                       'contents': contents,
                                       'filetype': 'rust' } ):
-      print( 'Message {0}'.format( pformat( message ) ) )
+      print( 'Message {}'.format( pformat( message ) ) )
       if 'diagnostics' in message:
         seen[ message[ 'filepath' ] ] = True
         if message[ 'filepath' ] not in DIAG_MATCHERS_PER_FILE:
           raise AssertionError(
-            'Received diagnostics for unexpected file {0}. '
-            'Only expected {1}'.format( message[ 'filepath' ], to_see ) )
+            'Received diagnostics for unexpected file {}. '
+            'Only expected {}'.format( message[ 'filepath' ], to_see ) )
         assert_that( message, has_entries( {
           'diagnostics': DIAG_MATCHERS_PER_FILE[ message[ 'filepath' ] ],
           'filepath': message[ 'filepath' ]
@@ -101,6 +100,6 @@ def Diagnostics_Poll_test( app ):
     raise AssertionError(
       str( e ) +
       'Timed out waiting for full set of diagnostics. '
-      'Expected to see diags for {0}, but only saw {1}.'.format(
+      'Expected to see diags for {}, but only saw {}.'.format(
         json.dumps( to_see, indent=2 ),
         json.dumps( sorted( iterkeys( seen ) ), indent=2 ) ) )

@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2018 ycmd contributors
+# Copyright (C) 2015-2019 ycmd contributors
 #
 # This file is part of ycmd.
 #
@@ -22,7 +22,7 @@ from __future__ import division
 # Not installing aliases from python-future; it's unreliable and slow.
 from builtins import *  # noqa
 
-from hamcrest import assert_that, has_items
+from hamcrest import assert_that, contains
 
 from ycmd.tests.rust import PathToTestFile, SharedYcmd
 from ycmd.tests.test_utils import BuildRequest, CompletionEntryMatcher
@@ -37,13 +37,12 @@ def GetCompletions_Basic_test( app ):
   completion_data = BuildRequest( filepath = filepath,
                                   filetype = 'rust',
                                   contents = contents,
-                                  force_semantic = True,
-                                  line_num = 11,
-                                  column_num = 11 )
+                                  line_num = 14,
+                                  column_num = 19 )
 
   results = app.post_json( '/completions',
                            completion_data ).json[ 'completions' ]
 
   assert_that( results,
-               has_items( CompletionEntryMatcher( 'build_rocket' ),
-                          CompletionEntryMatcher( 'build_shuttle' ) ) )
+               contains( CompletionEntryMatcher( 'build_rocket' ),
+                         CompletionEntryMatcher( 'build_shuttle' ) ) )

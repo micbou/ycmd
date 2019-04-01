@@ -10,5 +10,6 @@ impl Atmosphere for Mars {}
 
 fn main() {
     create_universe();
-    build_
+    let builder = Builder {};
+    builder.build_
 }

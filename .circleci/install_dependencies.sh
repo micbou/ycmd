@@ -50,12 +50,9 @@ PATH="${PYENV_ROOT}/bin:${PATH}"
 eval "$(pyenv init -)"
 
 if [ "${YCMD_PYTHON_VERSION}" == "2.7" ]; then
-  # Versions prior to 2.7.2 fail to compile with error "ld: library not found
-  # for -lSystemStubs"
-  # FIXME: pip 10 fails to upgrade packages on Python 2.7.3 or older. See
-  # https://github.com/pypa/pip/issues/5231 for the error. Revert to 2.7.2 once
-  # this is fixed in pip.
-  PYENV_VERSION="2.7.4"
+  # Python 2 versions older than 2.7.9 lack SNI support which is required to
+  # donwload rustup when enabling the Rust completer.
+  PYENV_VERSION="2.7.9"
 else
   PYENV_VERSION="3.4.0"
 fi

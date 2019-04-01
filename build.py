@@ -115,9 +115,23 @@ CLANGD_BINARIES_ERROR_MESSAGE = (
   'See the YCM docs for details on how to use a custom Clangd.' )
 
 
+def RemoveDirectory( directory ):
+  try_number = 0
+  max_tries = 100
+  while try_number < max_tries:
+    try:
+      shutil.rmtree( directory )
+      return
+    except OSError:
+      try_number += 1
+  raise RuntimeError(
+    'Cannot remove directory {} after {} tries.'.format( directory,
+                                                         max_tries ) )
+
+
 def MakeCleanDirectory( directory_path ):
   if p.exists( directory_path ):
-    shutil.rmtree( directory_path )
+    RemoveDirectory( directory_path )
   os.makedirs( directory_path )
 
 
@@ -256,20 +270,6 @@ def _CheckCall( args, **kwargs ):
     if exit_message:
       sys.exit( exit_message )
     sys.exit( error.returncode )
-
-
-def RemoveDirectory( directory ):
-  try_number = 0
-  max_tries = 100
-  while try_number < max_tries:
-    try:
-      shutil.rmtree( directory )
-      return
-    except OSError:
-      try_number += 1
-  raise RuntimeError(
-    'Cannot remove directory {} after {} tries.'.format( directory,
-                                                         max_tries ) )
 
 
 def GetGlobalPythonPrefix():
@@ -727,12 +727,13 @@ def EnableRustCompleter( switches ):
 
     rustup_init = os.path.join( build_dir, 'rustup-init' )
 
-    if not OnWindows():
-      rustup_url = 'https://sh.rustup.rs'
-    elif IS_64BIT:
-      rustup_url = 'https://win.rustup.rs/x86_64'
+    if OnWindows():
+      rustup_cmd = [ rustup_init ]
+      rustup_url = 'http://win.rustup.rs/{}'.format( 'x86_64' if IS_64BIT else
+                                                     'i686' )
     else:
-      rustup_url = 'https://win.rustup.rs/i686'
+      rustup_cmd = [ 'sh', rustup_init ]
+      rustup_url = 'http://sh.rustup.rs'
 
     DownloadFileTo( rustup_url, rustup_init )
 
@@ -740,7 +741,7 @@ def EnableRustCompleter( switches ):
     new_env[ 'RUSTUP_HOME' ] = build_dir
     new_env[ 'CARGO_HOME' ] = build_dir
 
-    CheckCall( [ rustup_init, '-y', '--default-toolchain', 'none' ],
+    CheckCall( rustup_cmd + [ '-y', '--default-toolchain', 'none' ],
                env = new_env,
                quiet = switches.quiet )
 
@@ -831,10 +832,6 @@ def EnableJavaCompleter( switches ):
   file_name = p.join( CACHE, package_name )
 
   MakeCleanDirectory( REPOSITORY )
-  if p.exists( REPOSITORY ):
-    RemoveDirectory( REPOSITORY )
-
-  os.makedirs( REPOSITORY )
 
   if not p.exists( CACHE ):
     os.makedirs( CACHE )

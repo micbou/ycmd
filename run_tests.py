@@ -99,11 +99,6 @@ COMPLETERS = {
     'test': [ '--exclude-dir=ycmd/tests/go' ],
     'aliases': [ 'gocode' ]
   },
-  'rust': {
-    'build': [ '--rust-completer' ],
-    'test': [ '--exclude-dir=ycmd/tests/rust' ],
-    'aliases': []
-  },
   'typescript': {
     'build': [ '--ts-completer' ],
     'test': [ '--exclude-dir=ycmd/tests/javascript',

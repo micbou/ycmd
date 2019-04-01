@@ -53,10 +53,9 @@ export PATH="${PYENV_ROOT}/bin:${PATH}"
 eval "$(pyenv init -)"
 
 if [ "${YCMD_PYTHON_VERSION}" == "2.7" ]; then
-  # Tests are failing on Python 2.7.0 with the exception "TypeError: argument
-  # can't be <type 'unicode'>" and importing the coverage module fails on Python
-  # 2.7.1.
-  PYENV_VERSION="2.7.2"
+  # Python 2 versions older than 2.7.9 lack SNI support which is required to
+  # donwload rustup when enabling the Rust completer.
+  PYENV_VERSION="2.7.9"
 else
   PYENV_VERSION="3.4.0"
 fi
