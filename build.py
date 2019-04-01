@@ -723,11 +723,28 @@ def EnableRustCompleter( switches ):
 
   toolchain_version = ReadToolchainVersion()
   if toolchain_version != RUST_TOOLCHAIN:
-    rustup = FindExecutableOrDie( 'rustup',
-                                  'rustup is required to install RLS.' )
-    rustup_home = mkdtemp( prefix = 'rustup_home_' )
+    build_dir = mkdtemp( prefix = 'rust_build_' )
+
+    rustup_init = os.path.join( build_dir, 'rustup-init' )
+
+    if not OnWindows():
+      rustup_url = 'https://sh.rustup.rs'
+    elif IS_64BIT:
+      rustup_url = 'https://win.rustup.rs/x86_64'
+    else:
+      rustup_url = 'https://win.rustup.rs/i686'
+
+    DownloadFileTo( rustup_url, rustup_init )
+
     new_env = os.environ.copy()
-    new_env[ 'RUSTUP_HOME' ] = rustup_home
+    new_env[ 'RUSTUP_HOME' ] = build_dir
+    new_env[ 'CARGO_HOME' ] = build_dir
+
+    CheckCall( [ rustup_init, '-y', '--default-toolchain', 'none' ],
+               env = new_env,
+               quiet = switches.quiet )
+
+    rustup = os.path.join( build_dir, 'bin', 'rustup' )
 
     try:
       CheckCall( [ rustup, 'toolchain', 'install', RUST_TOOLCHAIN ],
@@ -754,7 +771,7 @@ def EnableRustCompleter( switches ):
 
       WriteToolchainVersion( RUST_TOOLCHAIN )
     finally:
-      RemoveDirectory( rustup_home )
+      RemoveDirectory( build_dir )
 
   if switches.quiet:
     print( 'OK' )

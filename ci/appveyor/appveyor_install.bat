@@ -29,16 +29,6 @@ del get-pip.py
 python -c "with open('%python_path%\Lib\site-packages\sitecustomize.py', 'w') as f: f.write('import coverage\ncoverage.process_startup()')"
 
 ::
-:: Rust configuration
-::
-
-appveyor DownloadFile https://static.rust-lang.org/rustup/dist/i686-pc-windows-gnu/rustup-init.exe
-rustup-init.exe -y --default-toolchain none
-
-set PATH=%USERPROFILE%\.cargo\bin;%PATH%
-rustup --version
-
-::
 :: Java Configuration (Java 8 required for jdt.ls)
 ::
 if %arch% == 32 (

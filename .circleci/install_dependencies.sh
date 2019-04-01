@@ -98,15 +98,6 @@ fi
 sudo installer -pkg ${MONO_PATH}/mono-5.12.0.pkg -target /
 echo "export PATH=/Library/Frameworks/Mono.framework/Versions/Current/Commands:\$PATH" >> $BASH_ENV
 
-############
-# Rust setup
-############
-
-curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain none
-
-echo "export PATH=${HOME}/.cargo/bin:\$PATH" >> $BASH_ENV
-rustup --version
-
 #################
 # Java 8 setup
 #################
