@@ -22,6 +22,11 @@ env:
     - YCMD_PYTHON_VERSION=3.4
     - YCMD_PYTHON_VERSION=3.4
     - YCMD_PYTHON_VERSION=3.4
+    - YCMD_PYTHON_VERSION=3.4
+    - YCMD_PYTHON_VERSION=3.4
+    - YCMD_PYTHON_VERSION=3.4
+    - YCMD_PYTHON_VERSION=3.4
+    - YCMD_PYTHON_VERSION=3.4
 addons:
   # If this doesn't make much sense to you, see the travis docs:
   #    https://docs.travis-ci.com/user/migrating-from-legacy/

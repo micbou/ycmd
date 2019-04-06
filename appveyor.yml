@@ -6,6 +6,15 @@ environment:
   - APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2017
     arch: 64
     python: 37
+  - APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2017
+    arch: 64
+    python: 37
+  - APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2017
+    arch: 64
+    python: 37
+  - APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2017
+    arch: 64
+    python: 37
 install:
   - ci\appveyor\appveyor_install.bat
 build_script:
