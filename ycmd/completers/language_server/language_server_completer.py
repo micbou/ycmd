@@ -2100,17 +2100,25 @@ def _LspToYcmdLocation( file_contents, location ):
      - the line number of |location|
      - the byte offset converted from the UTF-16 offset of |location|
   )"""
-  line_num = location[ 'line' ] + 1
+  line = location[ 'line' ]
+  if line < 0:
+    LOGGER.error( 'Invalid LSP line position %s, assume 0', line )
+    line = 0
+
+  character = location[ 'character' ]
+  if character < 0:
+    LOGGER.error( 'Invalid LSP character offset %s, assume 0', character )
+    character = 0
+
   try:
-    line_value = file_contents[ location[ 'line' ] ]
-    return line_value, line_num, utils.CodepointOffsetToByteOffset(
+    line_value = file_contents[ line ]
+    return line_value, line + 1, utils.CodepointOffsetToByteOffset(
       line_value,
-      lsp.UTF16CodeUnitsToCodepoints( line_value,
-                                      location[ 'character' ] + 1 ) )
+      lsp.UTF16CodeUnitsToCodepoints( line_value, character + 1 ) )
   except IndexError:
     # This can happen when there are stale diagnostics in OnFileReadyToParse,
     # just return the value as-is.
-    return '', line_num, location[ 'character' ] + 1
+    return '', line + 1, character + 1
 
 
 def _CursorInsideLocation( request_data, location ):

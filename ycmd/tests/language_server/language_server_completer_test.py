@@ -1139,7 +1139,7 @@ def LanguageServerCompleter_GetHoverResponse_test():
       eq_( completer.GetHoverResponse( request_data ), 'test' )
 
 
-def LanguageServerCompleter_Diagnostics_PercentEncodeCannonical_test():
+def LanguageServerCompleter_Diagnostics_PercentEncodeCanonical_test():
   completer = MockCompleter()
   filepath = os.path.realpath( '/foo?' )
   uri = lsp.FilePathToUri( filepath )
@@ -1199,7 +1199,7 @@ def LanguageServerCompleter_Diagnostics_PercentEncodeCannonical_test():
     )
 
 
-def LanguageServerCompleter_OnFileReadyToParse_InvalidURI_test():
+def LanguageServerCompleter_Diagnostics_InvalidURI_test():
   completer = MockCompleter()
   filepath = os.path.realpath( '/foo?' )
   uri = lsp.FilePathToUri( filepath )
@@ -1248,7 +1248,67 @@ def LanguageServerCompleter_OnFileReadyToParse_InvalidURI_test():
     )
 
     with patch( 'ycmd.completers.language_server.language_server_protocol.'
-                'UriToFilePath', side_effect = lsp.InvalidUriException ) as \
-                    uri_to_filepath:
+                'UriToFilePath',
+                side_effect = lsp.InvalidUriException ) as uri_to_filepath:
       assert_that( completer.OnFileReadyToParse( request_data ), diagnostics )
+
       uri_to_filepath.assert_called()
+
+
+def LanguageServerCompleter_Diagnostics_InvalidLocation_test():
+  completer = MockCompleter()
+  filepath = os.path.realpath( '/foo' )
+  uri = lsp.FilePathToUri( filepath )
+  request_data = RequestWrap( BuildRequest( line_num = 1,
+                                            column_num = 1,
+                                            filepath = filepath,
+                                            contents = '' ) )
+  notification = {
+    'jsonrpc': '2.0',
+    'method': 'textDocument/publishDiagnostics',
+    'params': {
+      'uri': uri,
+      'diagnostics': [ {
+        'range': {
+          'start': { 'line': -2, 'character': 7 },
+          'end': { 'line': 3, 'character': -5 }
+        },
+        'severity': 1,
+        'message': 'First error'
+      } ]
+    }
+  }
+  completer.GetConnection()._notifications.put( notification )
+  completer.HandleNotificationInPollThread( notification )
+
+  with patch.object( completer, 'ServerIsReady', return_value = True ):
+    completer.OnFileReadyToParse( request_data )
+    # Simulate receipt of response and initialization complete
+    initialize_response = {
+      'result': {
+        'capabilities': {}
+      }
+    }
+    completer._HandleInitializeInPollThread( initialize_response )
+
+    # Starting column offset is 1 because the file contents are empty.
+    diagnostics = contains(
+      has_entries( {
+        'kind': equal_to( 'ERROR' ),
+        'location': LocationMatcher( filepath, 1, 1 ),
+        'location_extent': RangeMatcher( filepath, ( 1, 1 ), ( 4, 1 ) ),
+        'ranges': contains( RangeMatcher( filepath, ( 1, 1 ), ( 4, 1 ) ) ),
+        'text': equal_to( 'First error' ),
+        'fixit_available': False
+      } )
+    )
+
+    assert_that( completer.OnFileReadyToParse( request_data ), diagnostics )
+
+    assert_that(
+      completer.PollForMessages( request_data ),
+      contains( has_entries( {
+        'diagnostics': diagnostics,
+        'filepath': filepath
+      } ) )
+    )
