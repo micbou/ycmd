@@ -17,6 +17,6 @@ test ${python_version} == ${YCM_PYTHON_VERSION}
 # Add the Cargo executable to PATH
 PATH="${HOME}/.cargo/bin:${PATH}"
 
-python run_tests.py --runs 10
+python run_tests.py --runs 100 ycmd/tests/shutdown_test.py:Shutdown_test.FromWatchdogWithSubservers_test
 
 set +e

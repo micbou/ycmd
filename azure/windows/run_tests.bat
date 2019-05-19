@@ -7,4 +7,4 @@ set "PATH=C:\Go\bin;%PATH%"
 :: Prevent the already installed version of Go to conflict with ours.
 set GOROOT=
 
-python run_tests.py --msvc %MSVC% --runs 10
+python run_tests.py --msvc %MSVC% --runs 100 ycmd\tests\shutdown_test.py:Shutdown_test.FromWatchdogWithSubservers_test
