@@ -7,4 +7,4 @@ set "PATH=C:\Go\bin;%PATH%"
 :: Prevent the already installed version of Go to conflict with ours.
 set GOROOT=
 
-python run_tests.py --msvc %MSVC% --runs 10
+python run_tests.py --msvc %MSVC% --runs 100 ycmd\tests\java\diagnostics_test.py:Poll_Diagnostics_ProjectWide_Eclipse_test
