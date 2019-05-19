@@ -175,6 +175,8 @@ def ParseArguments():
   parser.add_argument( '--quiet', action = 'store_true',
                        help = 'Quiet installation mode. Just print overall '
                               'progress and errors' )
+  parser.add_argument( '--runs', type = int, default = 1,
+                       help = 'Set the number of times to run the tests' )
 
   parsed_args, nosetests_args = parser.parse_known_args()
 
@@ -279,8 +281,11 @@ def NoseTests( parsed_args, extra_nosetests_args ):
   else:
     env[ 'LD_LIBRARY_PATH' ] = LIBCLANG_DIR
 
-  subprocess.check_call( [ sys.executable, '-m', 'nose' ] + nosetests_args,
-                         env=env )
+  for nb_run in range( 1, parsed_args.runs + 1 ):
+    sys.stdout.write( 'Run {}\n'.format( nb_run ) )
+    sys.stdout.flush()
+    subprocess.check_call( [ sys.executable, '-m', 'nose' ] + nosetests_args,
+                           env=env )
 
 
 def Main():
