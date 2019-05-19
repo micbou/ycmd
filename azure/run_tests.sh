@@ -17,6 +17,6 @@ test ${python_version} == ${YCM_PYTHON_VERSION}
 # Add the Cargo executable to PATH
 PATH="${HOME}/.cargo/bin:${PATH}"
 
-python run_tests.py --runs 10
+python run_tests.py --runs 100 ycmd/tests/clangd/get_completions_test.py:GetCompletions_QuotedInclude_test
 
 set +e
